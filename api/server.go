@@ -40,7 +40,7 @@ func NewServer(config utils.Config, store db.Store) (*Server, error) {
 	docs.SwaggerInfo.Version = "1.0"
 	// docs.SwaggerInfo.Host = "defifundr-hyper.koyeb.app"
 	docs.SwaggerInfo.Host = "localhost:8080"
-	docs.SwaggerInfo.BasePath = "/api/v1"
+	// docs.SwaggerInfo.BasePath = "/api/v1"
 	docs.SwaggerInfo.Schemes = []string{"http"}
 
 	return server, nil
@@ -84,6 +84,7 @@ func (server *Server) setUpRouter() {
 	authRoutes.GET("/currentPrice", server.currentEthPrice)
 	authRoutes.GET("/campaigns/categories", server.getCategories)
 	authRoutes.GET("/campaigns/search", server.searchCampaignByName)
+	authRoutes.POST("/wallet-address/create", server.createWalletAddress)
 
 	server.router = router
 }
