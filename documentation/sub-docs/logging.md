@@ -76,7 +76,7 @@ userLogger.Info("User logged in")
 ```
 
 ## HTTP Request/Response Logging
-
+filepath: `internal/adapters/primary/api/middleware/logging_middleware.go`
 The system includes middleware for logging HTTP requests and responses. It automatically logs:
 
 - Request method, path, and query parameters
