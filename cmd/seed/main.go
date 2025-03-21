@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	db "github.com/demola234/defifundr/internal/adapters/secondary/db/postgres/sqlc"
+	db "github.com/defifundr/defifundr-backend/internal/adapters/secondary/db/postgres/sqlc"
 )
 
 func main() {

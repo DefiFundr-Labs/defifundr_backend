@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
-	db "github.com/demola234/defifundr/internal/adapters/secondary/db/postgres/sqlc"
+	db "github.com/defifundr/defifundr-backend/internal/adapters/secondary/db/postgres/sqlc"
 	"github.com/gin-gonic/gin"
 
-	"github.com/demola234/defifundr/config"
+	"github.com/defifundr/defifundr-backend/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // pgx driver for database/sql
 )

@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/demola234/defifundr/internal/core/domain"
-	"github.com/demola234/defifundr/internal/core/ports"
+	"github.com/defifundr/defifundr-backend/internal/core/domain"
+	"github.com/defifundr/defifundr-backend/internal/core/ports"
 	"github.com/google/uuid"
 
 	"golang.org/x/crypto/bcrypt"

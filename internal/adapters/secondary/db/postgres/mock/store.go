@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	sqlc "github.com/demola234/defifundr/internal/adapters/secondary/db/postgres/sqlc"
+	sqlc "github.com/defifundr/defifundr-backend/internal/adapters/secondary/db/postgres/sqlc"
 	gomock "github.com/golang/mock/gomock"
 	uuid "github.com/google/uuid"
 	pgtype "github.com/jackc/pgx/v5/pgtype"

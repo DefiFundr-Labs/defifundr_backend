@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"github.com/demola234/defifundr/internal/core/domain"
+	"github.com/defifundr/defifundr-backend/internal/core/domain"
 	"github.com/google/uuid"
 )
 
