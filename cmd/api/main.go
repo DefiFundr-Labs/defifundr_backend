@@ -62,7 +62,8 @@ func main() {
 	}
 
 	// Initialize the router
-	router := gin.Default()
+	// We use a custom logger middleware to log all requests
+	router := gin.New()
 
 	// Apply our custom logging middleware
 	router.Use(middleware.LoggingMiddleware(logger, &configs))
