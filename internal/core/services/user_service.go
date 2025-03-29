@@ -76,7 +76,7 @@ func (u *userService) UpdatePassword(ctx context.Context, userID uuid.UUID, oldP
 	}
 
 	// Verify old password
-	if !verifyPassword(oldPassword, *user.Password) {
+	if err := utils.CheckPassword(oldPassword, *user.Password); err != nil {
 		return errors.New("incorrect old password")
 	}
 

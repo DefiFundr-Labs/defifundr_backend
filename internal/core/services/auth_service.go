@@ -74,6 +74,10 @@ func (a *authService) Login(ctx context.Context, email string, password string, 
 		return nil, nil, fmt.Errorf("failed to get user with email %s: %w", email, err)
 	}
 
+	if user == nil {
+		return nil, nil, errors.New("invalid credentials")
+	}
+
 	// Verify password - replace with your password verification function
 	if !verifyPassword(password, *user.Password) {
 		return nil, nil, errors.New("invalid credentials")

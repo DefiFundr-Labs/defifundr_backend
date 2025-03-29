@@ -177,6 +177,88 @@ func seedTestData(t *testing.T, db *sql.DB) {
 }
 ```
 
+## Mocking With Counterfeiter
+
+### Installation
+
+To use our mock generation capabilities, you need to install counterfeiter:
+
+```bash
+go install github.com/maxbrunsfeld/counterfeiter/v6@latest
+```
+
+Ensure that your `$GOPATH/bin` is in your `$PATH` so you can execute the counterfeiter command.
+
+### Generating Mocks
+
+We provide a script to generate mocks for all interface dependencies:
+
+```bash
+# Make the script executable if needed
+chmod +x scripts/generate_mocks.sh
+
+# Generate all mocks
+./scripts/generate_mocks.sh
+```
+
+This will create mock implementations in the `internal/core/ports/mocks` directory.
+
+### Using Mocks in Tests
+
+Here's an example of how to use the generated mocks in tests:
+
+```go
+import (
+    "testing"
+    "github.com/demola234/defifundr/internal/core/ports/mocks"
+    "github.com/stretchr/testify/assert"
+)
+
+func TestServiceWithMocks(t *testing.T) {
+    // Arrange
+    mockRepo := new(mocks.FakeUserRepository)
+    
+    // Set up expectations
+    mockRepo.GetUserByIDReturns(&domain.User{
+        ID: uuid.New(),
+        Email: "test@example.com",
+    }, nil)
+    
+    // Create service with mock
+    service := NewUserService(mockRepo)
+    
+    // Act
+    result, err := service.GetUserByID(context.Background(), userID)
+    
+    // Assert
+    assert.NoError(t, err)
+    assert.Equal(t, "test@example.com", result.Email)
+    
+    // Verify mock was called
+    assert.Equal(t, 1, mockRepo.GetUserByIDCallCount())
+}
+```
+
+### Mocking Patterns
+
+1. **Arrange-Act-Assert with Mocks**:
+   - Set up your mock objects and their expectations
+   - Execute the code under test
+   - Verify the results and mock interactions
+
+2. **Verifying Calls**:
+   - `mockObj.MethodNameCallCount()` - Returns number of calls
+   - `mockObj.MethodNameArgsForCall(index)` - Returns arguments for a specific call
+
+3. **Stubbing Return Values**:
+   - `mockObj.MethodNameReturns(returnValues...)` - Sets return values for all calls
+   - `mockObj.MethodNameReturnsOnCall(index, returnValues...)` - Sets return values for a specific call
+
+4. **Testing Error Paths**:
+   - `mockObj.MethodNameReturns(nil, errors.New("expected error"))` - Test error handling
+
+Remember to regenerate mocks when interfaces change to ensure they match the latest definitions.
+
 ## Conclusion
 
 Thorough testing is essential to maintain high quality in the DefiFundr codebase. By following the guidelines in this document, we can ensure that our tests are effective, maintainable, and provide confidence in our code.
