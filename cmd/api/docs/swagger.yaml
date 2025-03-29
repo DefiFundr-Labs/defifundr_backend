@@ -100,6 +100,19 @@ definitions:
     - otp_code
     - user_id
     type: object
+  request.WaitlistJoinRequest:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      referral_code:
+        type: string
+      referral_source:
+        type: string
+    required:
+    - email
+    type: object
   response.ErrorResponse:
     properties:
       details:
@@ -123,6 +136,18 @@ definitions:
         type: string
       user:
         $ref: '#/definitions/response.UserResponse'
+    type: object
+  response.PageResponse:
+    properties:
+      items: {}
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total_items:
+        type: integer
+      total_pages:
+        type: integer
     type: object
   response.SuccessResponse:
     properties:
@@ -174,6 +199,44 @@ definitions:
       updated_at:
         type: string
     type: object
+  response.WaitlistEntryResponse:
+    properties:
+      email:
+        type: string
+      full_name:
+        type: string
+      id:
+        type: string
+      invited_date:
+        type: string
+      position:
+        type: integer
+      referral_code:
+        type: string
+      referral_source:
+        type: string
+      signup_date:
+        type: string
+      status:
+        type: string
+    type: object
+  response.WaitlistStatsResponse:
+    properties:
+      conversion_rate:
+        type: number
+      invited_count:
+        type: integer
+      registered_count:
+        type: integer
+      sources:
+        additionalProperties:
+          type: integer
+        type: object
+      total_signups:
+        type: integer
+      waiting_count:
+        type: integer
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -188,6 +251,82 @@ info:
   title: DefiFundr API
   version: "1.0"
 paths:
+  /admin/waitlist:
+    get:
+      consumes:
+      - application/json
+      description: List waitlist entries with pagination and filtering
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 10, max: 100)'
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by status (waiting, invited, registered)
+        in: query
+        name: status
+        type: string
+      - description: Filter by referral source
+        in: query
+        name: source
+        type: string
+      - description: Order by (signup_date_asc, signup_date_desc)
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated list of waitlist entries
+          schema:
+            $ref: '#/definitions/response.PageResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List waitlist entries
+      tags:
+      - waitlist
+  /admin/waitlist/export:
+    get:
+      consumes:
+      - application/json
+      description: Export all waitlist data as CSV
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: CSV file
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Export waitlist data
+      tags:
+      - waitlist
+  /admin/waitlist/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get statistics about the waitlist
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Waitlist statistics
+          schema:
+            $ref: '#/definitions/response.WaitlistStatsResponse'
+      security:
+      - BearerAuth: []
+      summary: Get waitlist statistics
+      tags:
+      - waitlist
   /auth/login:
     post:
       consumes:
@@ -424,6 +563,40 @@ paths:
       summary: Update user profile
       tags:
       - users
+  /waitlist:
+    post:
+      consumes:
+      - application/json
+      description: Register for early access to the platform
+      parameters:
+      - description: Waitlist join data
+        in: body
+        name: join
+        required: true
+        schema:
+          $ref: '#/definitions/request.WaitlistJoinRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Successfully joined waitlist
+          schema:
+            $ref: '#/definitions/response.WaitlistEntryResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Email already on waitlist
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "429":
+          description: Too many requests
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Join the waitlist
+      tags:
+      - waitlist
 schemes:
 - http
 securityDefinitions:

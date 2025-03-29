@@ -45,3 +45,14 @@ type EmailRepository interface {
 	SendVerificationEmail(ctx context.Context, email, name, code string) error
 	SendPasswordResetEmail(ctx context.Context, email, name, code string) error
 }
+
+
+// WaitlistRepository defines the storage operations for the waitlist
+type WaitlistRepository interface {
+	CreateWaitlistEntry(ctx context.Context, entry domain.WaitlistEntry) (*domain.WaitlistEntry, error)
+	GetWaitlistEntryByEmail(ctx context.Context, email string) (*domain.WaitlistEntry, error)
+	GetWaitlistEntryByID(ctx context.Context, id uuid.UUID) (*domain.WaitlistEntry, error)
+	GetWaitlistEntryByReferralCode(ctx context.Context, code string) (*domain.WaitlistEntry, error)
+	ListWaitlistEntries(ctx context.Context, limit, offset int, filters map[string]string) ([]domain.WaitlistEntry, int64, error)
+	ExportWaitlistToCsv(ctx context.Context) ([]byte, error)
+}

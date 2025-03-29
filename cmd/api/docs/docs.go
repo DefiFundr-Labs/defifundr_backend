@@ -24,6 +24,128 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/admin/waitlist": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List waitlist entries with pagination and filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "waitlist"
+                ],
+                "summary": "List waitlist entries",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (default: 10, max: 100)",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (waiting, invited, registered)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by referral source",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Order by (signup_date_asc, signup_date_desc)",
+                        "name": "order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Paginated list of waitlist entries",
+                        "schema": {
+                            "$ref": "#/definitions/response.PageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/waitlist/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Export all waitlist data as CSV",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "waitlist"
+                ],
+                "summary": "Export waitlist data",
+                "responses": {
+                    "200": {
+                        "description": "CSV file",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/waitlist/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get statistics about the waitlist",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "waitlist"
+                ],
+                "summary": "Get waitlist statistics",
+                "responses": {
+                    "200": {
+                        "description": "Waitlist statistics",
+                        "schema": {
+                            "$ref": "#/definitions/response.WaitlistStatsResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticate a user and generate access token",
@@ -392,6 +514,58 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/waitlist": {
+            "post": {
+                "description": "Register for early access to the platform",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "waitlist"
+                ],
+                "summary": "Join the waitlist",
+                "parameters": [
+                    {
+                        "description": "Waitlist join data",
+                        "name": "join",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.WaitlistJoinRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Successfully joined waitlist",
+                        "schema": {
+                            "$ref": "#/definitions/response.WaitlistEntryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already on waitlist",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too many requests",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -542,6 +716,26 @@ const docTemplate = `{
                 }
             }
         },
+        "request.WaitlistJoinRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "referral_code": {
+                    "type": "string"
+                },
+                "referral_source": {
+                    "type": "string"
+                }
+            }
+        },
         "response.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -576,6 +770,24 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/response.UserResponse"
+                }
+            }
+        },
+        "response.PageResponse": {
+            "type": "object",
+            "properties": {
+                "items": {},
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "total_items": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
                 }
             }
         },
@@ -652,6 +864,64 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "response.WaitlistEntryResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invited_date": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "referral_code": {
+                    "type": "string"
+                },
+                "referral_source": {
+                    "type": "string"
+                },
+                "signup_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.WaitlistStatsResponse": {
+            "type": "object",
+            "properties": {
+                "conversion_rate": {
+                    "type": "number"
+                },
+                "invited_count": {
+                    "type": "integer"
+                },
+                "registered_count": {
+                    "type": "integer"
+                },
+                "sources": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "total_signups": {
+                    "type": "integer"
+                },
+                "waiting_count": {
+                    "type": "integer"
                 }
             }
         }

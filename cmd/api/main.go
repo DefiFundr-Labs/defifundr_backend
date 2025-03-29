@@ -55,7 +55,7 @@ func main() {
 	defer cancel()
 
 	// Connect to the database using the pgx driver with database/sql
-	conn, err := pgxpool.New(ctx, "postgres://postgres:postgres@localhost:5433/defifundr?sslmode=disable")
+	conn, err := pgxpool.New(ctx, "postgres://root:secret@localhost:5433/defi?sslmode=disable")
 	if err != nil {
 		logger.Fatal("Unable to connect to database", err, map[string]interface{}{
 			"db_source": configs.DBSource,
@@ -71,18 +71,25 @@ func main() {
 	userRepo := repositories.NewUserRepository(*dbQueries)
 	otpRepo := repositories.NewOtpRepository(*dbQueries)
 	sessionRepo := repositories.NewSessionRepository(*dbQueries)
+	waitlistRepo := repositories.NewWaitlistRepository(*dbQueries)
+	
 	tokenMaker, err := tokenMaker.NewTokenMaker(configs.TokenSymmetricKey)
 	if err != nil {
 		log.Fatalf("cannot create token maker: %v", err)
 	}
 
+	// Create email service
+	emailService := services.NewEmailService(configs, logger)
+
 	// Create services
 	authService := services.NewAuthService(userRepo, otpRepo, sessionRepo, tokenMaker, configs)
 	userService := services.NewUserService(userRepo)
+	waitlistService := services.NewWaitlistService(waitlistRepo, emailService)
 
 	// Create handlers
 	authHandler := handlers.NewAuthHandler(authService, logger)
 	userHandler := handlers.NewUserHandler(userService)
+	waitlistHandler := handlers.NewWaitlistHandler(waitlistService, logger)
 
 	// Initialize the router
 	router := gin.New() // We use a custom logger middleware to log all requests
@@ -101,7 +108,7 @@ func main() {
 	}))
 
 	// Set up API routes
-	setupRoutes(router, authHandler, userHandler, configs, logger)
+	setupRoutes(router, authHandler, userHandler, waitlistHandler, configs, logger)
 
 	docs.SwaggerInfo.Title = "DefiFundr API"
 	docs.SwaggerInfo.Description = "Decentralized Payroll and Invoicing Platform for Remote Teams"
@@ -122,7 +129,7 @@ func main() {
 }
 
 // setupRoutes configures all the API routes
-func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, configs config.Config, logger logging.Logger) {
+func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, waitlistHandler *handlers.WaitlistHandler, configs config.Config, logger logging.Logger) {
 	// Health check endpoint
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -143,5 +150,5 @@ func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHand
 	// Register routes
 	routers.RegisterAuthRoutes(v1, authHandler, authMiddleware)
 	routers.RegisterUserRoutes(v1, userHandler, authMiddleware)
-
+	routers.RegisterWaitlistRoutes(v1, waitlistHandler, authMiddleware)
 }

@@ -35,6 +35,13 @@ type Config struct {
 	// Email Configuration
 	Email     string `mapstructure:"EMAIL"`
 	EmailPass string `mapstructure:"EMAIL_PASS"`
+	SMTPPort  int `mapstructure:"SMTP_PORT"`
+	SMTPHost  string `mapstructure:"SMTP_HOST"`
+	SMTPName  string `mapstructure:"SMTP_NAME"`
+	SenderEmail  string `mapstructure:"SENDER_EMAIL"`
+	SenderName  string `mapstructure:"SENDER_NAME"`
+	SMTPUsername  string `mapstructure:"SMTP_USERNAME"`
+	SMTPPassword  string `mapstructure:"SMTP_PASSWORD"`
 
 	// Security Configuration
 	RotateRefreshTokens bool `mapstructure:"ROTATE_REFRESH_TOKENS"`
@@ -59,7 +66,7 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// Set default values
 	viper.SetDefault("DB_DRIVER", "postgres")
-	viper.SetDefault("DB_SOURCE", "postgres://postgres:postgres@localhost:5433/defifundr?sslmode=disable")
+	viper.SetDefault("DB_SOURCE", "postgres://root:secret@localhost:5433/defi?sslmode=disable")
 	viper.SetDefault("HTTP_SERVER_ADDRESS", ":8080")
 	viper.SetDefault("ACCESS_TOKEN_DURATION", "15m")
 	viper.SetDefault("REFRESH_TOKEN_DURATION", "24h")

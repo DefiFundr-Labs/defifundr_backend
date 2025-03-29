@@ -31,3 +31,21 @@ type UserService interface {
 	UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error
 	UpdateKYC(ctx context.Context, kyc domain.KYC) error
 }
+
+
+// WaitlistService defines the use cases for the waitlist feature
+type WaitlistService interface {
+	JoinWaitlist(ctx context.Context, email, fullName, referralSource string) (*domain.WaitlistEntry, error)
+	GetWaitlistPosition(ctx context.Context, id uuid.UUID) (int, error)
+	GetWaitlistStats(ctx context.Context) (map[string]interface{}, error)
+	ListWaitlist(ctx context.Context, page, pageSize int, filters map[string]string) ([]domain.WaitlistEntry, int64, error)
+	ExportWaitlist(ctx context.Context) ([]byte, error)
+}
+
+
+// EmailService defines methods for sending application emails
+type EmailService interface {
+	SendWaitlistConfirmation(ctx context.Context, email, name, referralCode string, position int) error
+	SendWaitlistInvitation(ctx context.Context, email, name string, inviteLink string) error
+	SendBatchUpdate(ctx context.Context, emails []string, subject, message string) error
+}
