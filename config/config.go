@@ -32,6 +32,9 @@ type Config struct {
 	// Storage Configuration
 	CloudinaryAPIKey string `mapstructure:"CLOUDINARY_API_KEY"`
 
+	// RabbitMQ Configuration
+	RabbitMqURL string `mapstructure:"RABBITMQ_URL"`
+
 	// Email Configuration
 	Email     string `mapstructure:"EMAIL"`
 	EmailPass string `mapstructure:"EMAIL_PASS"`

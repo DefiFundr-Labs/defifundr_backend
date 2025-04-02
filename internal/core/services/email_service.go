@@ -8,34 +8,24 @@ import (
 	"github.com/demola234/defifundr/config"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	"github.com/demola234/defifundr/internal/core/ports"
-	"gopkg.in/gomail.v2"
 )
 
 type EmailService struct {
 	config    config.Config
 	logger    logging.Logger
-	fromEmail string
-	dialer    *gomail.Dialer
+	emailSender ports.EmailSender
 }
 
-// NewEmailService creates a new email service using gomail
-func NewEmailService(config config.Config, logger logging.Logger) ports.EmailService {
-	dialer := gomail.NewDialer(
-		config.SMTPHost, 
-		config.SMTPPort, 
-		config.SMTPUsername, 
-		config.SMTPPassword,
-	)
-	
+// NewEmailService creates a new email service
+func NewEmailService(config config.Config, logger logging.Logger, emailSender ports.EmailSender) ports.EmailService {
 	return &EmailService{
-		config:    config,
-		logger:    logger,
-		fromEmail: config.SMTPUsername,
-		dialer:    dialer,
+		config:      config,
+		logger:      logger,
+		emailSender: emailSender,
 	}
 }
 
-// SendWaitlistConfirmation sends a waitlist confirmation email
+// SendWaitlistConfirmation sends a waitlist confirmation email as plain text
 func (s *EmailService) SendWaitlistConfirmation(ctx context.Context, email, name, referralCode string, position int) error {
 	if s.isTestMode() {
 		s.logger.Info("Test mode: Would send waitlist confirmation")
@@ -43,6 +33,8 @@ func (s *EmailService) SendWaitlistConfirmation(ctx context.Context, email, name
 	}
 
 	subject := "Welcome to DefiFundr Waitlist"
+	
+	// Create plain text email body
 	body := fmt.Sprintf(
 		"Hello %s,\n\n"+
 		"Thank you for joining the DefiFundr waitlist. We're excited to have you on board!\n\n"+
@@ -53,8 +45,29 @@ func (s *EmailService) SendWaitlistConfirmation(ctx context.Context, email, name
 		"The DefiFundr Team",
 		name, position, referralCode,
 	)
+	
+	// Prepare data for the email sender
+	templateData := map[string]interface{}{
+		"Name":         name,
+		"Position":     position,
+		"ReferralCode": referralCode,
+		"AppName":      "DefiFundr",
+		"TextBody":     body,
+	}
 
-	return s.sendEmail(email, subject, body)
+	// Queue email with normal priority
+	_, err := s.emailSender.QueueEmail(ctx, email, subject, "text_email", templateData, ports.NormalPriority)
+	if err != nil {
+		s.logger.Error("Failed to queue waitlist confirmation email", err, map[string]interface{}{
+			"email": email,
+		})
+		return fmt.Errorf("failed to queue waitlist confirmation email: %w", err)
+	}
+
+	s.logger.Info("Queued waitlist confirmation email", map[string]interface{}{
+		"email": email,
+	})
+	return nil
 }
 
 // SendWaitlistInvitation sends an invitation email to users from the waitlist
@@ -65,17 +78,27 @@ func (s *EmailService) SendWaitlistInvitation(ctx context.Context, email, name s
 	}
 
 	subject := "You're In! Access DefiFundr Now"
-	body := fmt.Sprintf(
-		"Hello %s,\n\n"+
-		"Great news! You've been selected from our waitlist to access the DefiFundr platform.\n\n"+
-		"Click this link to get started: %s\n\n"+
-		"This invitation link is valid for the next 7 days.\n\n"+
-		"Best regards,\n"+
-		"The DefiFundr Team",
-		name, inviteLink,
-	)
+	
+	// Prepare template data
+	templateData := map[string]interface{}{
+		"Name":       name,
+		"InviteLink": inviteLink,
+		"AppName":    "DefiFundr",
+	}
 
-	return s.sendEmail(email, subject, body)
+	// Queue email with high priority
+	_, err := s.emailSender.QueueEmail(ctx, email, subject, "waitlist_invitation", templateData, ports.HighPriority)
+	if err != nil {
+		s.logger.Error("Failed to queue waitlist invitation email", err, map[string]interface{}{
+			"email": email,
+		})
+		return fmt.Errorf("failed to queue waitlist invitation email: %w", err)
+	}
+
+	s.logger.Info("Queued waitlist invitation email", map[string]interface{}{
+		"email": email,
+	})
+	return nil
 }
 
 // SendBatchUpdate sends a batch update email to multiple waitlist members
@@ -85,41 +108,29 @@ func (s *EmailService) SendBatchUpdate(ctx context.Context, emails []string, sub
 		return nil
 	}
 
+	// Prepare template data
+	templateData := map[string]interface{}{
+		"Message": message,
+		"AppName": "DefiFundr",
+	}
+
 	for _, email := range emails {
-		err := s.sendEmail(email, subject, message)
+		// Queue email with low priority (for batch operations)
+		_, err := s.emailSender.QueueEmail(ctx, email, subject, "general_update", templateData, ports.LowPriority)
 		if err != nil {
-			s.logger.Error("Failed to send batch update email", err, map[string]interface{}{
+			s.logger.Error("Failed to queue batch update email", err, map[string]interface{}{
 				"email": email,
 			})
 			// Continue with other emails instead of returning early
 			continue
 		}
-		s.logger.Debug("Sent batch update email")
-	}
-
-	s.logger.Info("Completed sending batch update emails")
-	return nil
-}
-
-// sendEmail is a helper function to send an email
-func (s *EmailService) sendEmail(to, subject, body string) error {
-	m := gomail.NewMessage()
-	m.SetHeader("From", s.fromEmail)
-	m.SetHeader("To", to)
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/plain", body)
-
-	if err := s.dialer.DialAndSend(m); err != nil {
-		s.logger.Error("Failed to send email", err, map[string]interface{}{
-			"to": to,
-			"subject": subject,
+		s.logger.Debug("Queued batch update email for", map[string]interface{}{
+			"email": email,
 		})
-		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	s.logger.Info("Sent email successfully", map[string]interface{}{
-		"to": to,
-		"subject": subject,
+	s.logger.Info("Completed queuing batch update emails", map[string]interface{}{
+		"total": len(emails),
 	})
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/demola234/defifundr/config"
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
+	"github.com/demola234/defifundr/infrastructure/mail"
 	"github.com/demola234/defifundr/infrastructure/middleware"
 	"github.com/demola234/defifundr/internal/adapters/handlers"
 	"github.com/demola234/defifundr/internal/adapters/repositories"
@@ -77,8 +78,30 @@ func main() {
 		log.Fatalf("cannot create token maker: %v", err)
 	}
 
-	// Create email service
-	emailService := services.NewEmailService(configs, logger)
+	// Initialize Email System
+	// Create RabbitMQ email sender
+	emailSender, err := mail.NewRabbitMQEmailSender(configs, logger)
+	if err != nil {
+		logger.Fatal("Failed to create RabbitMQ email sender", err, map[string]interface{}{
+			"rabbitmq_url": configs.RabbitMqURL,
+		})
+	}
+
+	// Start the email worker
+	emailWorker, err := mail.NewEmailWorker(configs, logger, 5) // 5 worker goroutines
+	if err != nil {
+		logger.Fatal("Failed to create email worker", err, nil)
+	}
+
+	// Start the email worker
+	err = emailWorker.Start()
+	if err != nil {
+		logger.Fatal("Failed to start email worker", err, nil)
+	}
+	defer emailWorker.Stop()
+
+	// Create email service using the email sender
+	emailService := services.NewEmailService(configs, logger, emailSender)
 
 	// Create services
 	authService := services.NewAuthService(userRepo, otpRepo, sessionRepo, tokenMaker, configs)

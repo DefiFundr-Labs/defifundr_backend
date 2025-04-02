@@ -4,8 +4,25 @@ package ports
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/demola234/defifundr/internal/core/domain"
+	"github.com/google/uuid"
+)
+
+// EmailAttachment represents an email attachment
+type EmailAttachment struct {
+	Filename string
+	Content  []byte
+	MimeType string
+}
+
+// EmailPriority represents the priority level of an email
+type EmailPriority int
+
+const (
+	LowPriority     EmailPriority = 1
+	NormalPriority  EmailPriority = 2
+	HighPriority    EmailPriority = 3
+	CriticalPriority EmailPriority = 4
 )
 
 // AuthService defines the use cases for authentication
@@ -42,6 +59,15 @@ type WaitlistService interface {
 	ExportWaitlist(ctx context.Context) ([]byte, error)
 }
 
+
+// EmailService defines methods for sending application emails
+type EmailSender interface {
+	SendEmail(ctx context.Context, recipient string, subject string, templateName string, data map[string]interface{}) error
+	SendEmailWithAttachment(ctx context.Context, recipient string, subject string, templateName string, 
+		data map[string]interface{}, attachments []EmailAttachment) error
+	QueueEmail(ctx context.Context, recipient string, subject string, templateName string, 
+		data map[string]interface{}, priority EmailPriority) (string, error)
+}
 
 // EmailService defines methods for sending application emails
 type EmailService interface {
