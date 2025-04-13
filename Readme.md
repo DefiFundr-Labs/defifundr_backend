@@ -4,6 +4,7 @@
 ![GitHub go.mod Go version (branch & subdirectory of monorepo)](https://img.shields.io/github/go-mod/go-version/demola234/deFICrowdFunding-Backend/main)
 [![GitHub issues](https://img.shields.io/github/issues/demola234/deFICrowdFunding-Backend)](https://github.com/DefiFundr-Labs/defifundr_backend/issues?q=is%3Aissue%20state%3Aopen)
 [![GitHub Repo stars](https://img.shields.io/github/stars/demola234/deFICrowdFunding-Backend)](https://github.com/DefiFundr-Labs/defifundr_backend/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/demola234/deFICrowdFunding-Backend)](https://github.com/DefiFundr-Labs/defifundr_backend/network/members)
 
 ## 📋 Table of Contents
 
