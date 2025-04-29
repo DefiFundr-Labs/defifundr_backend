@@ -29,6 +29,13 @@ type Config struct {
 	DeployPrivateKey   string `mapstructure:"DEPLOY_PRIVATE_KEY"`
 	PassPhase          string `mapstructure:"PASS_PHASE"`
 
+	// Blockchain Security Configuration
+	MaxGasLimit        uint64 `mapstructure:"MAX_GAS_LIMIT"`
+	MinGasPrice        uint64 `mapstructure:"MIN_GAS_PRICE"`
+	TxConfirmations    uint64 `mapstructure:"TX_CONFIRMATIONS"`
+	KeyRotationPeriod  time.Duration `mapstructure:"KEY_ROTATION_PERIOD"`
+	TxTimeout          time.Duration `mapstructure:"TX_TIMEOUT"`
+
 	// Storage Configuration
 	CloudinaryAPIKey string `mapstructure:"CLOUDINARY_API_KEY"`
 
@@ -78,6 +85,13 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("MAX_LOGIN_ATTEMPTS", 5)
 	viper.SetDefault("OTP_EXPIRY_DURATION", "5m")
 	viper.SetDefault("MAX_OTP_ATTEMPTS", 3)
+
+	// Set default values for blockchain security
+	viper.SetDefault("MAX_GAS_LIMIT", 3000000) // 3M gas units
+	viper.SetDefault("MIN_GAS_PRICE", 1000000000) // 1 Gwei
+	viper.SetDefault("TX_CONFIRMATIONS", 3) // Number of block confirmations
+	viper.SetDefault("KEY_ROTATION_PERIOD", "168h") // 7 days
+	viper.SetDefault("TX_TIMEOUT", "10m") // Transaction timeout
 
 	// Set default values for logging
 	viper.SetDefault("LOG_LEVEL", "info")
@@ -144,5 +158,12 @@ func (c *Config) ToDomainConfig() *domain.Config {
 		// OTP Configuration
 		OTPExpiryDuration: c.OTPExpiryDuration,
 		MaxOTPAttempts:    c.MaxOTPAttempts,
+
+		// Blockchain Security Configuration
+		MaxGasLimit:       c.MaxGasLimit,
+		MinGasPrice:       c.MinGasPrice,
+		TxConfirmations:   c.TxConfirmations,
+		KeyRotationPeriod: c.KeyRotationPeriod,
+		TxTimeout:         c.TxTimeout,
 	}
 }
