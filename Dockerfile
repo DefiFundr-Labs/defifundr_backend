@@ -1,5 +1,5 @@
 # Multi-stage build for DefiFundr backend
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install dependencies
 RUN apk add --no-cache git

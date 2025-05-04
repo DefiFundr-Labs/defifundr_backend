@@ -22,6 +22,9 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // @title DefiFundr API
@@ -41,6 +44,16 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and the JWT token.
 
+var (
+	apiRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "api_requests_total",
+			Help: "Total number of API requests received.",
+		},
+		[]string{"path", "method"},
+	)
+)
+
 func main() {
 	// Load configuration
 	configs, err := config.LoadConfig(".")
@@ -52,6 +65,9 @@ func main() {
 	logger.Info("Starting application", map[string]interface{}{
 		"environment": configs.Environment,
 	})
+
+	// Register Prometheus metrics
+	prometheus.MustRegister(apiRequests)
 
 	// Connect using pgx
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -161,6 +177,9 @@ func main() {
 
 	// Setup Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Prometheus /metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Start the HTTP server
 	logger.Info("HTTP server is running on", map[string]interface{}{

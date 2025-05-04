@@ -56,6 +56,18 @@ services:
     networks:
       - defifundr-network
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: defifundr-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+    networks:
+      - defifundr-network
+
 # Networks
 networks:
   defifundr-network:
