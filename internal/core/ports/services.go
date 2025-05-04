@@ -19,7 +19,7 @@ type AuthService interface {
 	// User profile completion
 	RegisterPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error)
 	RegisterAddressDetails(ctx context.Context, user domain.User) (*domain.User, error)
-	RegisterBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error)
+	RegisterBusinessDetails(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error)
 	GetProfileCompletionStatus(ctx context.Context, userID uuid.UUID) (*domain.ProfileCompletion, error)
 
 	// Multi-factor authentication

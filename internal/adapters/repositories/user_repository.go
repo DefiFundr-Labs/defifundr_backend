@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-
 // UserRepository struct implements the repository interface for users
 type UserRepository struct {
 	store db.Queries
@@ -38,15 +37,9 @@ func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (*dom
 		Nationality:         user.Nationality,
 		ResidentialCountry:  toPgTextPtr(user.ResidentialCountry),
 		JobRole:             toPgTextPtr(user.JobRole),
-		CompanyName:         toPgText(user.CompanyName),
-		CompanyAddress:      toPgText(user.CompanyAddress),
-		CompanyCity:         toPgText(user.CompanyCity),
-		CompanyPostalCode:   toPgText(user.CompanyPostalCode),
-		CompanyCountry:      toPgText(user.CompanyCountry),
 		AuthProvider:        toPgText(user.AuthProvider),
 		ProviderID:          user.ProviderID,
 		EmployeeType:        toPgText(user.EmployeeType),
-		CompanyWebsite:      toPgTextPtr(user.CompanyWebsite),
 		EmploymentType:      toPgTextPtr(user.EmploymentType),
 		CreatedAt:           pgtype.Timestamp{Time: time.Now(), Valid: true},
 		UpdatedAt:           pgtype.Timestamp{Time: time.Now(), Valid: true},
@@ -60,6 +53,37 @@ func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (*dom
 
 	// Map database user back to domain user
 	return mapDBUserToDomainUser(dbUser), nil
+}
+
+// Create User Company Info implements the user registration functionality
+func (r *UserRepository) UpdateCompanyInfo(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
+	params := db.UpdateUserCompanyDetailsParams{
+		ID:                    companyInfo.UserID,
+		CompanyName:           toPgTextPtr(companyInfo.CompanyName),
+		CompanyHeadquarters:   toPgTextPtr(companyInfo.CompanyHeadquarters),
+		CompanySize:           toPgTextPtr(companyInfo.CompanySize),
+		CompanyIndustry:       toPgTextPtr(companyInfo.CompanyIndustry),
+		CompanyDescription:    toPgTextPtr(companyInfo.CompanyDescription),
+		CompanyHeadquarters_2: toPgTextPtr(companyInfo.CompanyHeadquarters),
+		AccountType:           companyInfo.AccountType,
+	}
+
+	dbCompanyInfo, err := r.store.UpdateUserCompanyDetails(ctx, params)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return mapDBCompanyInfoToDomainCompanyInfo(dbCompanyInfo), nil
+}
+
+func (r *UserRepository) GetUserCompanyInfo(ctx context.Context, id uuid.UUID) (*domain.CompanyInfo, error) {
+	dbUser, err := r.store.GetUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return mapDBCompanyInfoToDomainCompanyInfo(dbUser), nil
 }
 
 // GetUserByID retrieves a user by their ID
@@ -96,13 +120,7 @@ func (r *UserRepository) UpdateUser(ctx context.Context, user domain.User) (*dom
 		Nationality:         user.Nationality,
 		ResidentialCountry:  toPgTextPtr(user.ResidentialCountry),
 		JobRole:             toPgTextPtr(user.JobRole),
-		CompanyWebsite:      toPgTextPtr(user.CompanyWebsite),
 		EmploymentType:      toPgTextPtr(user.EmploymentType),
-		CompanyName:         toPgText(user.CompanyName),
-		CompanyAddress:      toPgText(user.CompanyAddress),
-		CompanyCity:         toPgText(user.CompanyCity),
-		CompanyPostalCode:   toPgText(user.CompanyPostalCode),
-		CompanyCountry:      toPgText(user.CompanyCountry),
 		AuthProvider:        toPgText(user.AuthProvider),
 		ProviderID:          user.ProviderID,
 		UserAddress:         toPgTextPtr(user.UserAddress),
@@ -175,15 +193,9 @@ func mapDBUserToDomainUser(dbUser db.Users) *domain.User {
 		Nationality:         dbUser.Nationality,
 		ResidentialCountry:  strPtr(getTextString(dbUser.ResidentialCountry)),
 		JobRole:             strPtr(getTextString(dbUser.JobRole)),
-		CompanyName:         getTextString(dbUser.CompanyName),
-		CompanyAddress:      getTextString(dbUser.CompanyAddress),
-		CompanyCity:         getTextString(dbUser.CompanyCity),
-		CompanyPostalCode:   getTextString(dbUser.CompanyPostalCode),
-		CompanyCountry:      getTextString(dbUser.CompanyCountry),
 		AuthProvider:        getTextString(dbUser.AuthProvider),
 		ProviderID:          dbUser.ProviderID,
 		EmployeeType:        getTextString(dbUser.EmployeeType),
-		CompanyWebsite:      strPtr(getTextString(dbUser.CompanyWebsite)),
 		EmploymentType:      strPtr(getTextString(dbUser.EmploymentType)),
 		// Fill in missing fields with empty values
 		Address:      getTextString(dbUser.UserAddress),
@@ -192,6 +204,17 @@ func mapDBUserToDomainUser(dbUser db.Users) *domain.User {
 		WebAuthToken: "",
 		CreatedAt:    dbUser.CreatedAt,
 		UpdatedAt:    dbUser.UpdatedAt,
+	}
+}
+
+func mapDBCompanyInfoToDomainCompanyInfo(dbCompanyInfo db.Users) *domain.CompanyInfo {
+	return &domain.CompanyInfo{
+		CompanyName:         strPtr(getTextString((dbCompanyInfo.CompanyName))),
+		CompanyWebsite:      strPtr(getTextString((dbCompanyInfo.CompanyWebsite))),
+		CompanySize:         strPtr(getTextString((dbCompanyInfo.CompanySize))),
+		CompanyIndustry:     strPtr(getTextString((dbCompanyInfo.CompanyIndustry))),
+		CompanyDescription:  strPtr(getTextString((dbCompanyInfo.CompanyDescription))),
+		CompanyHeadquarters: strPtr(getTextString((dbCompanyInfo.CompanyHeadquarters))),
 	}
 }
 
@@ -212,25 +235,22 @@ func (r *UserRepository) UpdateUserPersonalDetails(ctx context.Context, user dom
 
 	return mapDBUserToDomainUser(dbUser), nil
 }
-func (r *UserRepository) UpdateUserBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+func (r *UserRepository) UpdateUserBusinessDetails(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	params := db.UpdateUserCompanyDetailsParams{
-		ID:                user.ID,
-		CompanyName:       toPgText(user.CompanyName),
-		CompanyAddress:    toPgText(user.CompanyAddress),
-		CompanyCity:       toPgText(user.CompanyCity),
-		CompanyPostalCode: toPgText(user.CompanyPostalCode),
-		CompanyCountry:    toPgText(user.CompanyCountry),
-		CompanyWebsite:    toPgTextPtr(user.CompanyWebsite),
-		EmploymentType:    toPgTextPtr(user.EmploymentType),
+		ID:                  companyInfo.UserID,
+		CompanyName:         toPgText(*companyInfo.CompanyName),
+		CompanySize:         toPgText(*companyInfo.CompanySize),
+		CompanyIndustry:     toPgText(*companyInfo.CompanyIndustry),
+		CompanyDescription:  toPgText(*companyInfo.CompanyDescription),
+		CompanyHeadquarters: toPgText(*companyInfo.CompanyHeadquarters),
+		AccountType:         companyInfo.AccountType,
 	}
-
-	
 
 	dbUser, err := r.store.UpdateUserCompanyDetails(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	return mapDBUserToDomainUser(dbUser), nil
+	return mapDBCompanyInfoToDomainCompanyInfo(dbUser), nil
 }
 
 func (r *UserRepository) UpdateUserAddressDetails(ctx context.Context, user domain.User) (*domain.User, error) {
@@ -258,75 +278,74 @@ func toPgTextPtr(s *string) pgtype.Text {
 	return pgtype.Text{String: *s, Valid: true}
 }
 
-
 // DeactivateUser marks a user as inactive
 func (r *UserRepository) DeactivateUser(ctx context.Context, id uuid.UUID) error {
-    // // Use UpdateUserIsActiveStatus method from the store
-    // params := db.UpdateUserIsActiveStatusParams{
-    //     ID:      id,
-    //     IsActive: false,
-    // }
-    
-    // return r.store.UpdateUserIsActiveStatus(ctx, params)
+	// // Use UpdateUserIsActiveStatus method from the store
+	// params := db.UpdateUserIsActiveStatusParams{
+	//     ID:      id,
+	//     IsActive: false,
+	// }
+
+	// return r.store.UpdateUserIsActiveStatus(ctx, params)
 	panic("implementation")
 }
 
 // DeleteUser removes a user from the database
 func (r *UserRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
-    return r.store.DeleteUser(ctx, id)
+	return r.store.DeleteUser(ctx, id)
 }
 
 // SetMFASecret sets the MFA secret for a user
 func (r *UserRepository) SetMFASecret(ctx context.Context, userID uuid.UUID, secret string) error {
-    // params := db.UpdateUserMFASecretParams{
-    //     ID:       userID,
-    //     MfaSecret: pgtype.Text{String: secret, Valid: true},
-    // }
-    
-    // return r.store.UpdateUserMFASecret(ctx, params)
-		panic("implementation")
+	// params := db.UpdateUserMFASecretParams{
+	//     ID:       userID,
+	//     MfaSecret: pgtype.Text{String: secret, Valid: true},
+	// }
+
+	// return r.store.UpdateUserMFASecret(ctx, params)
+	panic("implementation")
 }
 
 // GetMFASecret retrieves the MFA secret for a user
 func (r *UserRepository) GetMFASecret(ctx context.Context, userID uuid.UUID) (string, error) {
-    // // Get the user from the database
-    // dbUser, err := r.store.GetUser(ctx, userID)
-    // if err != nil {
-    //     return "", err
-    // }
-    
-    // // Check if MFA secret exists
-    // if !dbUser.MfaSecret.Valid {
-    //     return "", nil
-    // }
-    
-    // return dbUser.MfaSecret.String, nil
-		panic("implementation")
+	// // Get the user from the database
+	// dbUser, err := r.store.GetUser(ctx, userID)
+	// if err != nil {
+	//     return "", err
+	// }
+
+	// // Check if MFA secret exists
+	// if !dbUser.MfaSecret.Valid {
+	//     return "", nil
+	// }
+
+	// return dbUser.MfaSecret.String, nil
+	panic("implementation")
 }
 
 // Fix the UpdatePassword method to match the interface signature
 // UpdatePassword updates a user's password after verifying the old password
 // func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
-    // // First get the user to verify the old password
-    // dbUser, err := r.store.GetUser(ctx, userID)
-    // if err != nil {
-    //     return err
-    // }
-    
-    // // Here you would typically verify that oldPassword matches the stored hash
-    // // This would require a password verification function that's not shown in the code
-    // // For example:
-    // // if !verifyPassword(oldPassword, dbUser.PasswordHash.String) {
-    // //     return errors.New("old password does not match")
-    // // }
-    
-    // // Update with the new password hash
-    // params := db.UpdateUserPasswordParams{
-    //     ID:           userID,
-    //     PasswordHash: pgtype.Text{String: newPassword, Valid: true},
-    // }
-    
-    // return r.store.UpdateUserPassword(ctx, params)
+// // First get the user to verify the old password
+// dbUser, err := r.store.GetUser(ctx, userID)
+// if err != nil {
+//     return err
+// }
+
+// // Here you would typically verify that oldPassword matches the stored hash
+// // This would require a password verification function that's not shown in the code
+// // For example:
+// // if !verifyPassword(oldPassword, dbUser.PasswordHash.String) {
+// //     return errors.New("old password does not match")
+// // }
+
+// // Update with the new password hash
+// params := db.UpdateUserPasswordParams{
+//     ID:           userID,
+//     PasswordHash: pgtype.Text{String: newPassword, Valid: true},
+// }
+
+// return r.store.UpdateUserPassword(ctx, params)
 
 // 		panic("implementation")
 

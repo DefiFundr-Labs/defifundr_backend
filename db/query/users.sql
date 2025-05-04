@@ -14,10 +14,10 @@ INSERT INTO users (
   residential_country,
   job_role,
   company_name,
-  company_address,
-  company_city,
-  company_postal_code,
-  company_country,
+  company_size,
+  company_industry,
+  company_description,
+  company_headquarters,
   auth_provider,
   provider_id,
   employee_type,
@@ -42,10 +42,10 @@ INSERT INTO users (
   @residential_country,
   @job_role,
   COALESCE(@company_name, ''),
-  COALESCE(@company_address, ''),
-  COALESCE(@company_city, ''),
-  COALESCE(@company_postal_code, ''),
-  COALESCE(@company_country, ''),
+  COALESCE(@company_size, ''),
+  COALESCE(@company_industry, ''),
+  COALESCE(@company_description, ''),
+  COALESCE(@company_headquarters, ''),
   @auth_provider,
   @provider_id,
   @employee_type,
@@ -106,6 +106,8 @@ SELECT COUNT(*) FROM users;
 SELECT COUNT(*) FROM users
 WHERE account_type = $1;
 
+
+
 -- name: UpdateUser :one
 -- Updates user details and returns the updated user
 UPDATE users
@@ -123,10 +125,10 @@ SET
   company_website = $12,
   employment_type = $13,
   company_name = $14,
-  company_address = $15,
-  company_city = $16,
-  company_postal_code = $17,
-  company_country = $18,
+  company_headquarters = $15,
+  company_size = $16,
+  company_description = $17,
+  company_industry = $18,
   auth_provider = COALESCE($19, auth_provider),
   provider_id = COALESCE($20, provider_id),
   user_address = COALESCE($21, user_address),
@@ -160,6 +162,7 @@ SET
   WHERE id = $1
   RETURNING *;
 
+
 -- name: UpdateUserAddress :one
 -- Updates a user's address
 UPDATE users
@@ -176,12 +179,12 @@ RETURNING *;
 UPDATE users
 SET
   company_name = COALESCE($2, company_name),
-  company_address = COALESCE($3, company_address),
-  company_city = COALESCE($4, company_city),
-  company_postal_code = COALESCE($5, company_postal_code),
-  company_country = COALESCE($6, company_country),
-  company_website = COALESCE($7, company_website),
-  employment_type = COALESCE($8, employment_type),
+  company_headquarters = COALESCE($3, company_headquarters),
+  company_size = COALESCE($4, company_size),
+  company_industry = COALESCE($5, company_industry),
+  company_description = COALESCE($6, company_description),
+  company_headquarters = COALESCE($7, company_headquarters),
+  account_type = COALESCE($8, account_type),
   updated_at = now()
 WHERE id = $1
 RETURNING *;

@@ -308,42 +308,43 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 }
 
 // RegisterBusiness implements ports.AuthService.
-func (a *authService) RegisterBusiness(ctx context.Context, user domain.User) (*domain.User, error) {
+func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	// Add Users business details
 	// Update the user with business details
 	a.logger.Info("Starting user personal details update process", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": companyInfo.UserID,
 	})
 
 	// Get the existing user by ID
-	existingUser, err := a.userRepo.GetUserByID(ctx, user.ID)
+	existingCompanyInfo, err := a.userRepo.GetUserCompanyInfo(ctx, companyInfo.UserID)
 	if err != nil {
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
 	// Update only the personal details fields, keeping other fields as they are
-	updatedUser := *existingUser
+	updatedCompany := *existingCompanyInfo
 	// Update only the company details fields, keeping other fields as they are
-	updatedUser.CompanyName = user.CompanyName
-	updatedUser.CompanyAddress = user.CompanyAddress
-	updatedUser.CompanyCity = user.CompanyCity
-	updatedUser.CompanyCountry = user.CompanyCountry
-	updatedUser.CompanyPostalCode = user.CompanyPostalCode
-	updatedUser.CompanyWebsite = user.CompanyWebsite
+	updatedCompany.CompanyName = companyInfo.CompanyName
+	updatedCompany.CompanyDescription = companyInfo.CompanyDescription
+	updatedCompany.AccountType = companyInfo.AccountType
+	updatedCompany.CompanySize = companyInfo.CompanySize
+	updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
+	updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
+	updatedCompany.CompanyWebsite = companyInfo.CompanyWebsite
 
 	// Update the user in the database
-	users, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedUser)
+	company, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedCompany)
 	if err != nil {
 		a.logger.Error("Failed to update user", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
-	return users, nil
+	return company, nil
 }
 
 // RegisterPersonalDetails implements ports.AuthService
@@ -394,65 +395,59 @@ func (a *authService) RegisterPersonalDetails(ctx context.Context, user domain.U
 }
 
 // RegisterBusinessDetails implements ports.AuthService
-func (a *authService) RegisterBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	a.logger.Info("Starting business details update process", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": companyInfo.UserID,
 	})
 
 	// Get the existing user by ID
-	existingUser, err := a.userRepo.GetUserByID(ctx, user.ID)
+	existingCompany, err := a.userRepo.GetUserCompanyInfo(ctx, companyInfo.UserID)
 	if err != nil {
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
 	// Update only the business details fields, keeping other fields as they are
-	updatedUser := *existingUser
+	updatedCompany := *existingCompany
 
-	if user.CompanyName != "" {
-		updatedUser.CompanyName = user.CompanyName
+	updatedCompany.CompanyName = companyInfo.CompanyName
+
+	if *companyInfo.CompanyDescription != "" {
+		updatedCompany.CompanyDescription = companyInfo.CompanyName
 	}
 
-	if user.CompanyAddress != "" {
-		updatedUser.CompanyAddress = user.CompanyAddress
+	if *companyInfo.CompanyHeadquarters != "" {
+		updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
 	}
 
-	if user.CompanyCity != "" {
-		updatedUser.CompanyCity = user.CompanyCity
+	if *companyInfo.CompanyIndustry != "" {
+		updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
 	}
 
-	if user.CompanyPostalCode != "" {
-		updatedUser.CompanyPostalCode = user.CompanyPostalCode
+	if *companyInfo.CompanySize != "" {
+		updatedCompany.CompanySize = companyInfo.CompanySize
 	}
 
-	if user.CompanyCountry != "" {
-		updatedUser.CompanyCountry = user.CompanyCountry
-	}
-
-	if user.CompanyWebsite != nil {
-		updatedUser.CompanyWebsite = user.CompanyWebsite
-	}
-
-	if user.EmploymentType != nil {
-		updatedUser.EmploymentType = user.EmploymentType
+	if companyInfo.AccountType != "" {
+		updatedCompany.AccountType = companyInfo.AccountType
 	}
 
 	// Update the user with business details
-	result, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedUser)
+	businessResult, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedCompany)
 	if err != nil {
 		a.logger.Error("Failed to update business details", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		return nil, fmt.Errorf("failed to update business details: %w", err)
 	}
 
 	a.logger.Info("Business details updated successfully", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": companyInfo.UserID,
 	})
 
-	return result, nil
+	return businessResult, nil
 }
 
 // RegisterAddressDetails implements ports.AuthService
@@ -717,6 +712,7 @@ func (a *authService) GetUserWallets(ctx context.Context, userID uuid.UUID) ([]d
 
 // GetProfileCompletionStatus calculates profile completion percentage
 func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uuid.UUID) (*domain.ProfileCompletion, error) {
+
 	// Get user data
 	user, err := a.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
@@ -738,20 +734,12 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 	}
 
 	// Account type specific fields
-	if user.AccountType == "business" {
-		fields = append(fields, []fieldCheck{
-			{"Company Name", true, user.CompanyName != ""},
-			{"Company Address", true, user.CompanyAddress != ""},
-			{"Company City", true, user.CompanyCity != ""},
-			{"Company Country", true, user.CompanyCountry != ""},
-		}...)
-	} else {
-		fields = append(fields, []fieldCheck{
-			{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
-			{"City", true, user.City != ""},
-			{"Postal Code", true, user.PostalCode != ""},
-		}...)
-	}
+
+	fields = append(fields, []fieldCheck{
+		{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
+		{"City", true, user.City != ""},
+		{"Postal Code", true, user.PostalCode != ""},
+	}...)
 
 	// Calculate completion percentage
 	var completedFields, requiredFields int
