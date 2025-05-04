@@ -42,7 +42,7 @@ type RegisterBusinessDetailsRequest struct {
 	CompanyIndustry    string `json:"company_industry"`
 	CompanyCountry     string `json:"company_country" binding:"required"`
 	CompanySize        string `json:"company_size"`
-	AccountType        string `json:"accountType_type"`
+	AccountType        string `json:"account_type"`
 }
 
 // LinkWalletRequest represents the request to link a blockchain wallet

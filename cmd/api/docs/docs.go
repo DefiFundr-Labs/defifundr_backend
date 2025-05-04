@@ -1158,7 +1158,7 @@ const docTemplate = `{
                 "company_name"
             ],
             "properties": {
-                "accountType_type": {
+                "account_type": {
                     "type": "string"
                 },
                 "company_address": {

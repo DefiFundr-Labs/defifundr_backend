@@ -57,7 +57,7 @@ definitions:
     type: object
   request.RegisterBusinessDetailsRequest:
     properties:
-      accountType_type:
+      account_type:
         type: string
       company_address:
         type: string
