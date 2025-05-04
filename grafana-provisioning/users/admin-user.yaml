@@ -1,0 +1,14 @@
+apiVersion: 1
+users:
+  - name: "admin"
+    email: "admin@defifundr.com"
+    login: "admin"
+    password: "admin"
+    isGrafanaAdmin: true
+    isDisabled: false
+  - name: "observer"
+    email: "observer@defifundr.com"
+    login: "observer"
+    password: "observer"
+    isGrafanaAdmin: false
+    isDisabled: false
