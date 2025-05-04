@@ -832,26 +832,19 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 	}
 
 	// Create user domain object
-	companyWebsite := req.CompanyWebsite
-	employmentType := req.EmploymentType
-	userDetails := domain.User{
-		ID:                user.UserID,
-		CompanyName:       req.CompanyName,
-		CompanyAddress:    req.CompanyAddress,
-		CompanyCity:       req.CompanyCity,
-		CompanyPostalCode: req.CompanyPostalCode,
-		CompanyCountry:    req.CompanyCountry,
-	}
-
-	if companyWebsite != "" {
-		userDetails.CompanyWebsite = &companyWebsite
-	}
-	if employmentType != "" {
-		userDetails.EmploymentType = &employmentType
+	accountType := req.AccountType
+	userDetails := domain.CompanyInfo{
+		UserID:              user.UserID,
+		CompanyName:         &req.CompanyName,
+		CompanySize:         &req.CompanySize,
+		CompanyIndustry:     &req.CompanyIndustry,
+		CompanyDescription:  &req.CompanyDescription,
+		CompanyHeadquarters: &req.CompanyCountry,
+		AccountType:         accountType,
 	}
 
 	// Update user
-	updatedUser, err := h.authService.RegisterBusinessDetails(ctx, userDetails)
+	_, err := h.authService.RegisterBusinessDetails(ctx, userDetails)
 	if err != nil {
 		reqLogger.Error("Failed to update business details", err, map[string]interface{}{
 			"user_id": user.UserID,
@@ -863,22 +856,9 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 		return
 	}
 
-	// Build response
-	resp := response.UserResponse{
-		ID:         updatedUser.ID.String(),
-		Email:      updatedUser.Email,
-		FirstName:  updatedUser.FirstName,
-		LastName:   updatedUser.LastName,
-		Provider:   updatedUser.AuthProvider,
-		ProviderID: updatedUser.ProviderID,
-		CreatedAt:  updatedUser.CreatedAt,
-		UpdatedAt:  updatedUser.UpdatedAt,
-	}
-
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
 		Message: "Business details updated successfully",
-		Data:    resp,
 	})
 
 	reqLogger.Info("Business details updated successfully", map[string]interface{}{

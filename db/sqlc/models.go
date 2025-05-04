@@ -117,23 +117,6 @@ type Sessions struct {
 	CreatedAt        pgtype.Timestamp `json:"created_at"`
 }
 
-type SessionsV2 struct {
-	ID               uuid.UUID        `json:"id"`
-	UserID           uuid.UUID        `json:"user_id"`
-	RefreshToken     string           `json:"refresh_token"`
-	UserAgent        string           `json:"user_agent"`
-	LastUsedAt       pgtype.Timestamp `json:"last_used_at"`
-	WebOauthClientID pgtype.Text      `json:"web_oauth_client_id"`
-	OauthAccessToken pgtype.Text      `json:"oauth_access_token"`
-	OauthIDToken     pgtype.Text      `json:"oauth_id_token"`
-	UserLoginType    string           `json:"user_login_type"`
-	MfaEnabled       bool             `json:"mfa_enabled"`
-	ClientIp         string           `json:"client_ip"`
-	IsBlocked        bool             `json:"is_blocked"`
-	ExpiresAt        pgtype.Timestamp `json:"expires_at"`
-	CreatedAt        pgtype.Timestamp `json:"created_at"`
-}
-
 type Transactions struct {
 	ID     uuid.UUID `json:"id"`
 	UserID uuid.UUID `json:"user_id"`
@@ -196,10 +179,10 @@ type Users struct {
 	ResidentialCountry    pgtype.Text        `json:"residential_country"`
 	JobRole               pgtype.Text        `json:"job_role"`
 	CompanyName           pgtype.Text        `json:"company_name"`
-	CompanyAddress        pgtype.Text        `json:"company_address"`
-	CompanyCity           pgtype.Text        `json:"company_city"`
-	CompanyPostalCode     pgtype.Text        `json:"company_postal_code"`
-	CompanyCountry        pgtype.Text        `json:"company_country"`
+	CompanySize           pgtype.Text        `json:"company_size"`
+	CompanyIndustry       pgtype.Text        `json:"company_industry"`
+	CompanyDescription    pgtype.Text        `json:"company_description"`
+	CompanyHeadquarters   pgtype.Text        `json:"company_headquarters"`
 	UserAddress           pgtype.Text        `json:"user_address"`
 	UserCity              pgtype.Text        `json:"user_city"`
 	UserPostalCode        pgtype.Text        `json:"user_postal_code"`

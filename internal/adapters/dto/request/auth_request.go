@@ -36,13 +36,13 @@ type RegisterAddressDetailsRequest struct {
 
 // RegisterBusinessDetailsRequest represents business details
 type RegisterBusinessDetailsRequest struct {
-	CompanyName       string `json:"company_name" binding:"required"`
-	CompanyAddress    string `json:"company_address" binding:"required"`
-	CompanyCity       string `json:"company_city" binding:"required"`
-	CompanyPostalCode string `json:"company_postal_code"`
-	CompanyCountry    string `json:"company_country" binding:"required"`
-	CompanyWebsite    string `json:"company_website"`
-	EmploymentType    string `json:"employment_type"`
+	CompanyName        string `json:"company_name" binding:"required"`
+	CompanyAddress     string `json:"company_address" binding:"required"`
+	CompanyDescription string `json:"company_description" binding:"required"`
+	CompanyIndustry    string `json:"company_industry"`
+	CompanyCountry     string `json:"company_country" binding:"required"`
+	CompanySize        string `json:"company_size"`
+	AccountType        string `json:"accountType_type"`
 }
 
 // LinkWalletRequest represents the request to link a blockchain wallet
@@ -153,19 +153,20 @@ func (r *RegisterBusinessDetailsRequest) Validate() error {
 	}
 
 	// Validate company address
-	if r.CompanyAddress == "" {
+	if r.CompanyIndustry == "" {
 		return errors.New("company address is required")
 	}
 
 	// Validate company city
-	if r.CompanyCity == "" {
-		return errors.New("company city is required")
+	if r.AccountType == "" {
+		return errors.New("account type is required")
 	}
 
-	// Validate company postal code
-	if r.CompanyPostalCode == "" {
-		return errors.New("company postal code is required")
+	// Validate company description if should be more than 50 characters
+	if r.CompanyDescription == "" && len(r.CompanyDescription) < 50 {
+		return errors.New("company description is required and should be more than 50 characters")
 	}
+
 
 	// Validate company country
 	if r.CompanyCountry == "" {

@@ -22,12 +22,6 @@ type User struct {
 	Nationality         string    `json:"nationality"`
 	ResidentialCountry  *string   `json:"residential_country,omitempty"`
 	JobRole             *string   `json:"job_role,omitempty"`
-	CompanyName         string    `json:"company_name,omitempty"`
-	CompanyAddress      string    `json:"company_address,omitempty"`
-	CompanyCity         string    `json:"company_city,omitempty"`
-	CompanyPostalCode   string    `json:"company_postal_code,omitempty"`
-	CompanyCountry      string    `json:"company_country,omitempty"`
-	CompanyWebsite      *string   `json:"company_website,omitempty"`
 	EmploymentType      *string   `json:"employment_type,omitempty"`
 	UserCity            *string   `json:"user_city,omitempty"`
 	UserAddress         *string   `json:"user_address,omitempty"`

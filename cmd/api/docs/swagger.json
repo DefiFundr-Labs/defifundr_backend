@@ -1151,30 +1151,30 @@
             "type": "object",
             "required": [
                 "company_address",
-                "company_city",
                 "company_country",
+                "company_description",
                 "company_name"
             ],
             "properties": {
-                "company_address": {
+                "accountType_type": {
                     "type": "string"
                 },
-                "company_city": {
+                "company_address": {
                     "type": "string"
                 },
                 "company_country": {
                     "type": "string"
                 },
+                "company_description": {
+                    "type": "string"
+                },
+                "company_industry": {
+                    "type": "string"
+                },
                 "company_name": {
                     "type": "string"
                 },
-                "company_postal_code": {
-                    "type": "string"
-                },
-                "company_website": {
-                    "type": "string"
-                },
-                "employment_type": {
+                "company_size": {
                     "type": "string"
                 }
             }

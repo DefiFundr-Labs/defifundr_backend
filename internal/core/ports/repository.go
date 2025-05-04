@@ -11,14 +11,15 @@ import (
 type UserRepository interface {
 	CreateUser(ctx context.Context, user domain.User) (*domain.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	GetUserCompanyInfo(ctx context.Context, id uuid.UUID) (*domain.CompanyInfo, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	UpdateUser(ctx context.Context, user domain.User) (*domain.User, error)
 	UpdateUserPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error)
 	UpdateUserAddressDetails(ctx context.Context, user domain.User) (*domain.User, error)
-	UpdateUserBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error)
+	UpdateUserBusinessDetails(context.Context, domain.CompanyInfo) (*domain.CompanyInfo, error)
 	DeactivateUser(ctx context.Context, id uuid.UUID) error
-	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error 
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	SetMFASecret(ctx context.Context, userID uuid.UUID, secret string) error
 	GetMFASecret(ctx context.Context, userID uuid.UUID) (string, error)
