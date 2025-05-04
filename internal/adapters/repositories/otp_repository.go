@@ -8,6 +8,7 @@ import (
 	"github.com/demola234/defifundr/infrastructure/common/utils"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -21,6 +22,8 @@ func NewOtpRepository(store db.Queries) *OTPRepository {
 
 // CreateOTP creates a new OTP in the database
 func (r *OTPRepository) CreateOTP(ctx context.Context, otp domain.OTPVerification) (*domain.OTPVerification, error) {
+	ctx, span := tracing.Tracer("otp-repository").Start(ctx, "CreateOTP")
+	defer span.End()
 
 	hashedOtp := utils.Hash(otp.OTPCode)
 
@@ -41,11 +44,13 @@ func (r *OTPRepository) CreateOTP(ctx context.Context, otp domain.OTPVerificatio
 		HashedOTP: returnedData.HashedOtp,
 		Purpose:   domain.OTPPurpose(returnedData.Purpose),
 	}, nil
-
 }
 
 // GetOTPByUserIDAndPurpose retrieves an OTP by user ID and purpose
 func (r *OTPRepository) GetOTPByUserIDAndPurpose(ctx context.Context, userID uuid.UUID, purpose domain.OTPPurpose) (*domain.OTPVerification, error) {
+	ctx, span := tracing.Tracer("otp-repository").Start(ctx, "GetOTPByUserIDAndPurpose")
+	defer span.End()
+
 	otpData, err := r.store.GetOTPVerificationByUserAndPurpose(ctx, db.GetOTPVerificationByUserAndPurposeParams{
 		UserID:  pgtype.UUID{Bytes: userID, Valid: true},
 		Purpose: db.OtpPurpose(purpose),
@@ -62,11 +67,13 @@ func (r *OTPRepository) GetOTPByUserIDAndPurpose(ctx context.Context, userID uui
 		HashedOTP: otpData.HashedOtp,
 		Purpose:   domain.OTPPurpose(otpData.Purpose),
 	}, nil
-
 }
 
 // VerifyOTP verifies an OTP
 func (r *OTPRepository) VerifyOTP(ctx context.Context, id uuid.UUID, code string) error {
+	ctx, span := tracing.Tracer("otp-repository").Start(ctx, "VerifyOTP")
+	defer span.End()
+
 	otpData, err := r.store.GetOTPVerificationByID(ctx, id)
 
 	if err != nil {

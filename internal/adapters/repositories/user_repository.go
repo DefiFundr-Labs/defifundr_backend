@@ -7,6 +7,7 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
+	"github.com/demola234/defifundr/pkg/tracing"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -24,6 +25,8 @@ func NewUserRepository(store db.Queries) *UserRepository {
 
 // RegisterUser implements the user registration functionality
 func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "CreateUser")
+	defer span.End()
 
 	params := db.CreateUserParams{
 		ID:                  user.ID,
@@ -64,6 +67,8 @@ func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (*dom
 
 // GetUserByID retrieves a user by their ID
 func (r *UserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "GetUserByID")
+	defer span.End()
 	dbUser, err := r.store.GetUser(ctx, id)
 	if err != nil {
 		return nil, err
@@ -74,6 +79,8 @@ func (r *UserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*domain
 
 // GetUserByEmail retrieves a user by their email
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "GetUserByEmail")
+	defer span.End()
 	dbUser, err := r.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, err
@@ -84,6 +91,8 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 
 // UpdateUser updates a user's information
 func (r *UserRepository) UpdateUser(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdateUser")
+	defer span.End()
 	params := db.UpdateUserParams{
 		ID:                  user.ID,
 		Email:               user.Email,
@@ -120,6 +129,8 @@ func (r *UserRepository) UpdateUser(ctx context.Context, user domain.User) (*dom
 
 // UpdatePassword updates a user's password
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdatePassword")
+	defer span.End()
 	params := db.UpdateUserPasswordParams{
 		ID:           userID,
 		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
@@ -130,6 +141,8 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, p
 
 // CheckEmailExists checks if an email already exists
 func (r *UserRepository) CheckEmailExists(ctx context.Context, email string) (bool, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "CheckEmailExists")
+	defer span.End()
 	exists, err := r.store.CheckEmailExists(ctx, email)
 	if err != nil {
 		return false, err
@@ -196,6 +209,8 @@ func mapDBUserToDomainUser(dbUser db.Users) *domain.User {
 }
 
 func (r *UserRepository) UpdateUserPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdateUserPersonalDetails")
+	defer span.End()
 	params := db.UpdateUserPersonalDetailsParams{
 		ID:                  user.ID,
 		PhoneNumber:         toPgTextPtr(user.PhoneNumber),
@@ -213,6 +228,8 @@ func (r *UserRepository) UpdateUserPersonalDetails(ctx context.Context, user dom
 	return mapDBUserToDomainUser(dbUser), nil
 }
 func (r *UserRepository) UpdateUserBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdateUserBusinessDetails")
+	defer span.End()
 	params := db.UpdateUserCompanyDetailsParams{
 		ID:                user.ID,
 		CompanyName:       toPgText(user.CompanyName),
@@ -234,6 +251,8 @@ func (r *UserRepository) UpdateUserBusinessDetails(ctx context.Context, user dom
 }
 
 func (r *UserRepository) UpdateUserAddressDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdateUserAddressDetails")
+	defer span.End()
 	params := db.UpdateUserAddressParams{
 		ID:             user.ID,
 		UserAddress:    toPgTextPtr(user.UserAddress),
@@ -261,6 +280,8 @@ func toPgTextPtr(s *string) pgtype.Text {
 
 // DeactivateUser marks a user as inactive
 func (r *UserRepository) DeactivateUser(ctx context.Context, id uuid.UUID) error {
+	_, span := tracing.Tracer("user-repository").Start(ctx, "DeactivateUser")
+	defer span.End()
     // // Use UpdateUserIsActiveStatus method from the store
     // params := db.UpdateUserIsActiveStatusParams{
     //     ID:      id,
@@ -273,11 +294,15 @@ func (r *UserRepository) DeactivateUser(ctx context.Context, id uuid.UUID) error
 
 // DeleteUser removes a user from the database
 func (r *UserRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "DeleteUser")
+	defer span.End()
     return r.store.DeleteUser(ctx, id)
 }
 
 // SetMFASecret sets the MFA secret for a user
 func (r *UserRepository) SetMFASecret(ctx context.Context, userID uuid.UUID, secret string) error {
+	_, span := tracing.Tracer("user-repository").Start(ctx, "SetMFASecret")
+	defer span.End()
     // params := db.UpdateUserMFASecretParams{
     //     ID:       userID,
     //     MfaSecret: pgtype.Text{String: secret, Valid: true},
@@ -289,6 +314,8 @@ func (r *UserRepository) SetMFASecret(ctx context.Context, userID uuid.UUID, sec
 
 // GetMFASecret retrieves the MFA secret for a user
 func (r *UserRepository) GetMFASecret(ctx context.Context, userID uuid.UUID) (string, error) {
+	_, span := tracing.Tracer("user-repository").Start(ctx, "GetMFASecret")
+	defer span.End()
     // // Get the user from the database
     // dbUser, err := r.store.GetUser(ctx, userID)
     // if err != nil {

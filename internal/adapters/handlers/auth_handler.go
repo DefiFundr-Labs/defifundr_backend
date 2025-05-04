@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"net/http"
 	"time"
 
@@ -51,6 +52,10 @@ func (h *AuthHandler) GetUserRepository() ports.UserRepository {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/web3auth/login [post]
 func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "Web3AuthLogin")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request correlation ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -209,6 +214,10 @@ func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/register [post]
 func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "RegisterUser")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -342,6 +351,10 @@ func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "Login")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
 	reqLogger.Debug("Processing login request")
@@ -446,6 +459,10 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "RefreshToken")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -529,6 +546,10 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
 // @Router /auth/profile/personal-details [put]
 
 func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdatePersonalDetails")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -672,6 +693,10 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/address [put]
 func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdateAddressDetails")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -792,6 +817,10 @@ func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/business [put]
 func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdateBusinessDetails")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -897,6 +926,10 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/completion [get]
 func (h *AuthHandler) GetProfileCompletion(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetProfileCompletion")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -973,6 +1006,10 @@ func (h *AuthHandler) GetProfileCompletion(ctx *gin.Context) {
 // @Router /auth/wallet/link [post]
 
 func (h *AuthHandler) LinkWallet(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "LinkWallet")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1090,6 +1127,10 @@ func (h *AuthHandler) LinkWallet(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/wallet [get]
 func (h *AuthHandler) GetWallets(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetWallets")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1166,6 +1207,10 @@ func (h *AuthHandler) GetWallets(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/devices [get]
 func (h *AuthHandler) GetUserDevices(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetUserDevices")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1249,6 +1294,10 @@ func (h *AuthHandler) GetUserDevices(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/devices/revoke [post]
 func (h *AuthHandler) RevokeDevice(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "RevokeDevice")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1383,6 +1432,10 @@ func (h *AuthHandler) RevokeDevice(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/events [get]
 func (h *AuthHandler) GetUserSecurityEvents(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetUserSecurityEvents")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1515,6 +1568,10 @@ func (h *AuthHandler) GetUserSecurityEvents(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/mfa/setup [post]
 func (h *AuthHandler) SetupMFA(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "SetupMFA")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1581,6 +1638,10 @@ func (h *AuthHandler) SetupMFA(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/mfa/verify [post]
 func (h *AuthHandler) VerifyMFA(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "VerifyMFA")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1671,6 +1732,10 @@ func (h *AuthHandler) VerifyMFA(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/logout [post]
 func (h *AuthHandler) Logout(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "Logout")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)

@@ -16,13 +16,13 @@ import (
 	"github.com/demola234/defifundr/internal/adapters/routers"
 	"github.com/demola234/defifundr/internal/core/services"
 	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"github.com/demola234/defifundr/pkg/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"github.com/demola234/defifundr/pkg/tracing"
 
 	"github.com/demola234/defifundr/internal/adapters/dto/request"
 	"github.com/demola234/defifundr/internal/adapters/dto/response"
@@ -34,6 +35,14 @@ func NewUserHandler(userService ports.UserService) *UserHandler {
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Router /users/profile [get]
 func (h *UserHandler) GetProfile(ctx *gin.Context) {
+	// Start OTel span for this handler
+	spanCtx, span := tracing.Tracer("user-handler").Start(ctx.Request.Context(), "GetProfile")
+	defer span.End()
+
+	// Use spanCtx for downstream calls
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
+
 	// Get user ID from context (set by auth middleware)
 	userID, exists := ctx.Get("user_id")
 	if !exists {
@@ -53,8 +62,10 @@ func (h *UserHandler) GetProfile(ctx *gin.Context) {
 	}
 
 	// Get user profile
-	user, err := h.userService.GetUserByID(ctx, userUUID)
+	user, err := h.userService.GetUserByID(ctxWithSpan, userUUID)
 	if err != nil {
+		span.RecordError(err)
+
 		errResponse := response.ErrorResponse{
 			Message: appErrors.ErrInternalServer.Error(),
 		}
@@ -104,6 +115,10 @@ func (h *UserHandler) GetProfile(ctx *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Router /users/profile [put]
 func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("user-handler").Start(ctx.Request.Context(), "UpdateProfile")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Get user ID from context (set by auth middleware)
 	userID, exists := ctx.Get("user_id")
 	if !exists {
@@ -141,8 +156,9 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	}
 
 	// Get existing user
-	currentUser, err := h.userService.GetUserByID(ctx, userUUID)
+	currentUser, err := h.userService.GetUserByID(ctxWithSpan, userUUID)
 	if err != nil {
+		span.RecordError(err)
 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Message: "Failed to retrieve user profile",
 		})
@@ -166,8 +182,9 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	}
 
 	// Update user profile
-	user, err := h.userService.UpdateUser(ctx, updatedUser)
+	user, err := h.userService.UpdateUser(ctxWithSpan, updatedUser)
 	if err != nil {
+		span.RecordError(err)
 		errResponse := response.ErrorResponse{
 			Message: appErrors.ErrInternalServer.Error(),
 		}
@@ -212,6 +229,10 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Router /users/change-password [post]
 func (h *UserHandler) ChangePassword(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("user-handler").Start(ctx.Request.Context(), "ChangePassword")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Get user ID from context (set by auth middleware)
 	userID, exists := ctx.Get("user_id")
 	if !exists {
@@ -249,8 +270,9 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 	}
 
 	// Change password
-	err := h.userService.UpdatePassword(ctx, userUUID, req.OldPassword, req.NewPassword)
+	err := h.userService.UpdatePassword(ctxWithSpan, userUUID, req.OldPassword, req.NewPassword)
 	if err != nil {
+		span.RecordError(err)
 		errResponse := response.ErrorResponse{
 			Message: appErrors.ErrInternalServer.Error(),
 		}

@@ -9,6 +9,7 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -21,6 +22,8 @@ func NewWaitlistRepository(store db.Queries) *WaitlistRepository {
 }
 
 func (r *WaitlistRepository) CreateWaitlistEntry(ctx context.Context, entry domain.WaitlistEntry) (*domain.WaitlistEntry, error) {
+	ctx, span := tracing.Tracer("waitlist-repository").Start(ctx, "CreateWaitlistEntry")
+	defer span.End()
 
 	// Prepare invited and registered dates
 	var invitedDate pgtype.Timestamptz
@@ -82,6 +85,9 @@ func (r *WaitlistRepository) CreateWaitlistEntry(ctx context.Context, entry doma
 }
 
 func (r *WaitlistRepository) GetWaitlistEntryByEmail(ctx context.Context, email string) (*domain.WaitlistEntry, error) {
+	ctx, span := tracing.Tracer("waitlist-repository").Start(ctx, "GetWaitlistEntryByEmail")
+	defer span.End()
+
 	dbEntry, err := r.store.GetWaitlistEntryByEmail(ctx, email)
 	if err != nil {
 		return nil, err
@@ -111,6 +117,9 @@ func (r *WaitlistRepository) GetWaitlistEntryByEmail(ctx context.Context, email 
 }
 
 func (r *WaitlistRepository) GetWaitlistEntryByID(ctx context.Context, id uuid.UUID) (*domain.WaitlistEntry, error) {
+	ctx, span := tracing.Tracer("waitlist-repository").Start(ctx, "GetWaitlistEntryByID")
+	defer span.End()
+
 	dbEntry, err := r.store.GetWaitlistEntryByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -140,6 +149,9 @@ func (r *WaitlistRepository) GetWaitlistEntryByID(ctx context.Context, id uuid.U
 }
 
 func (r *WaitlistRepository) GetWaitlistEntryByReferralCode(ctx context.Context, code string) (*domain.WaitlistEntry, error) {
+	ctx, span := tracing.Tracer("waitlist-repository").Start(ctx, "GetWaitlistEntryByReferralCode")
+	defer span.End()
+
 	dbEntry, err := r.store.GetWaitlistEntryByReferralCode(ctx, code)
 	if err != nil {
 		return nil, err
@@ -169,6 +181,9 @@ func (r *WaitlistRepository) GetWaitlistEntryByReferralCode(ctx context.Context,
 }
 
 func (r *WaitlistRepository) ListWaitlistEntries(ctx context.Context, limit, offset int, filters map[string]string) ([]domain.WaitlistEntry, int64, error) {
+	ctx, span := tracing.Tracer("waitlist-repository").Start(ctx, "ListWaitlistEntries")
+	defer span.End()
+
 	// Build filter conditions based on the provided filters
 	params := db.ListWaitlistEntriesParams{
 		Limit:  int32(limit),
@@ -217,6 +232,9 @@ func (r *WaitlistRepository) ListWaitlistEntries(ctx context.Context, limit, off
 }
 
 func (r *WaitlistRepository) ExportWaitlistToCsv(ctx context.Context) ([]byte, error) {
+	ctx, span := tracing.Tracer("waitlist-repository").Start(ctx, "ExportWaitlistToCsv")
+	defer span.End()
+
 	// Get all waitlist entries
 	dbEntries, err := r.store.ExportWaitlistEntries(ctx)
 	if err != nil {

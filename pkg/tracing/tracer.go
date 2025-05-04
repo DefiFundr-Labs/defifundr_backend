@@ -80,9 +80,8 @@ func NewTracerProvider(ctx context.Context, cfg Config) (*TracerProvider, error)
 		exporter, exporterErr = stdouttrace.New(stdouttrace.WithPrettyPrint())
 	} else {
 		// Use OTLP exporter for production
-		conn, err := grpc.DialContext(ctx, cfg.OTLPEndpoint,
+		conn, err := grpc.NewClient(cfg.OTLPEndpoint,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			return nil, err
