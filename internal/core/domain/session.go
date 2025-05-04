@@ -20,4 +20,5 @@ type Session struct {
 	IsBlocked        bool      `json:"is_blocked"`
 	ExpiresAt        time.Time `json:"expires_at"`
 	CreatedAt        time.Time `json:"created_at"`
+	LastUsedAt       time.Time `json:"last_used_at"`
 }

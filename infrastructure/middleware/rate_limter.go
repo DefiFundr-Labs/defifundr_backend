@@ -3,42 +3,41 @@ package middleware
 import (
 	"net/http"
 	"sync"
+	"time"
 
+	response "github.com/demola234/defifundr/internal/adapters/dto/response"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
 
-// Mutex to protect the userLimiters map
-var mu sync.Mutex
+// RateLimitMiddleware limits the number of authentication attempts
+func RateLimitMiddleware(limit int, duration time.Duration) gin.HandlerFunc {
+	// Create a limiter for each IP
+	ipLimiters := make(map[string]*rate.Limiter)
+	mu := &sync.Mutex{}
 
-// Store rate limiters for each user or IP address.
-var userLimiters = make(map[string]*rate.Limiter)
+	return func(ctx *gin.Context) {
+		ip := ctx.ClientIP()
 
+		// Get the rate limiter for this IP
+		mu.Lock()
+		limiter, exists := ipLimiters[ip]
+		if !exists {
+			limiter = rate.NewLimiter(rate.Limit(limit)/rate.Limit(duration.Seconds()), limit)
+			ipLimiters[ip] = limiter
+		}
+		mu.Unlock()
 
-func RateLimitMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Use the client's IP address as the key.
-		userKey := c.ClientIP()
-
-		limiter := getLimiter(userKey)
+		// Check if this request is allowed
 		if !limiter.Allow() {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too Many Requests"})
-			c.Abort()
+			ctx.JSON(http.StatusTooManyRequests, response.ErrorResponse{
+				Success: false,
+				Message: "Rate limit exceeded. Please try again later.",
+			})
+			ctx.Abort()
 			return
 		}
-		c.Next()
-	}
-}
 
-// getLimiter returns a rate limiter for the given user or IP.
-func getLimiter(key string) *rate.Limiter {
-	mu.Lock()
-	defer mu.Unlock()
-
-	limiter, exists := userLimiters[key]
-	if !exists {
-		limiter = rate.NewLimiter(1, 5)
-		userLimiters[key] = limiter
+		ctx.Next()
 	}
-	return limiter
 }

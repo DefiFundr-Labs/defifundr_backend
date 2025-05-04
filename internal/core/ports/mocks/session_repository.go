@@ -11,6 +11,18 @@ import (
 )
 
 type FakeSessionRepository struct {
+	BlockAllUserSessionsStub        func(context.Context, uuid.UUID) error
+	blockAllUserSessionsMutex       sync.RWMutex
+	blockAllUserSessionsArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}
+	blockAllUserSessionsReturns struct {
+		result1 error
+	}
+	blockAllUserSessionsReturnsOnCall map[int]struct {
+		result1 error
+	}
 	BlockSessionStub        func(context.Context, uuid.UUID) error
 	blockSessionMutex       sync.RWMutex
 	blockSessionArgsForCall []struct {
@@ -49,6 +61,20 @@ type FakeSessionRepository struct {
 	deleteSessionReturnsOnCall map[int]struct {
 		result1 error
 	}
+	GetActiveSessionsByUserIDStub        func(context.Context, uuid.UUID) ([]domain.Session, error)
+	getActiveSessionsByUserIDMutex       sync.RWMutex
+	getActiveSessionsByUserIDArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}
+	getActiveSessionsByUserIDReturns struct {
+		result1 []domain.Session
+		result2 error
+	}
+	getActiveSessionsByUserIDReturnsOnCall map[int]struct {
+		result1 []domain.Session
+		result2 error
+	}
 	GetSessionByIDStub        func(context.Context, uuid.UUID) (*domain.Session, error)
 	getSessionByIDMutex       sync.RWMutex
 	getSessionByIDArgsForCall []struct {
@@ -77,8 +103,97 @@ type FakeSessionRepository struct {
 		result1 *domain.Session
 		result2 error
 	}
+	UpdateRefreshTokenStub        func(context.Context, uuid.UUID, string) (*domain.Session, error)
+	updateRefreshTokenMutex       sync.RWMutex
+	updateRefreshTokenArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+		arg3 string
+	}
+	updateRefreshTokenReturns struct {
+		result1 *domain.Session
+		result2 error
+	}
+	updateRefreshTokenReturnsOnCall map[int]struct {
+		result1 *domain.Session
+		result2 error
+	}
+	UpdateSessionStub        func(context.Context, domain.Session) error
+	updateSessionMutex       sync.RWMutex
+	updateSessionArgsForCall []struct {
+		arg1 context.Context
+		arg2 domain.Session
+	}
+	updateSessionReturns struct {
+		result1 error
+	}
+	updateSessionReturnsOnCall map[int]struct {
+		result1 error
+	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
+}
+
+func (fake *FakeSessionRepository) BlockAllUserSessions(arg1 context.Context, arg2 uuid.UUID) error {
+	fake.blockAllUserSessionsMutex.Lock()
+	ret, specificReturn := fake.blockAllUserSessionsReturnsOnCall[len(fake.blockAllUserSessionsArgsForCall)]
+	fake.blockAllUserSessionsArgsForCall = append(fake.blockAllUserSessionsArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}{arg1, arg2})
+	stub := fake.BlockAllUserSessionsStub
+	fakeReturns := fake.blockAllUserSessionsReturns
+	fake.recordInvocation("BlockAllUserSessions", []interface{}{arg1, arg2})
+	fake.blockAllUserSessionsMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeSessionRepository) BlockAllUserSessionsCallCount() int {
+	fake.blockAllUserSessionsMutex.RLock()
+	defer fake.blockAllUserSessionsMutex.RUnlock()
+	return len(fake.blockAllUserSessionsArgsForCall)
+}
+
+func (fake *FakeSessionRepository) BlockAllUserSessionsCalls(stub func(context.Context, uuid.UUID) error) {
+	fake.blockAllUserSessionsMutex.Lock()
+	defer fake.blockAllUserSessionsMutex.Unlock()
+	fake.BlockAllUserSessionsStub = stub
+}
+
+func (fake *FakeSessionRepository) BlockAllUserSessionsArgsForCall(i int) (context.Context, uuid.UUID) {
+	fake.blockAllUserSessionsMutex.RLock()
+	defer fake.blockAllUserSessionsMutex.RUnlock()
+	argsForCall := fake.blockAllUserSessionsArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeSessionRepository) BlockAllUserSessionsReturns(result1 error) {
+	fake.blockAllUserSessionsMutex.Lock()
+	defer fake.blockAllUserSessionsMutex.Unlock()
+	fake.BlockAllUserSessionsStub = nil
+	fake.blockAllUserSessionsReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeSessionRepository) BlockAllUserSessionsReturnsOnCall(i int, result1 error) {
+	fake.blockAllUserSessionsMutex.Lock()
+	defer fake.blockAllUserSessionsMutex.Unlock()
+	fake.BlockAllUserSessionsStub = nil
+	if fake.blockAllUserSessionsReturnsOnCall == nil {
+		fake.blockAllUserSessionsReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.blockAllUserSessionsReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeSessionRepository) BlockSession(arg1 context.Context, arg2 uuid.UUID) error {
@@ -270,6 +385,71 @@ func (fake *FakeSessionRepository) DeleteSessionReturnsOnCall(i int, result1 err
 	}{result1}
 }
 
+func (fake *FakeSessionRepository) GetActiveSessionsByUserID(arg1 context.Context, arg2 uuid.UUID) ([]domain.Session, error) {
+	fake.getActiveSessionsByUserIDMutex.Lock()
+	ret, specificReturn := fake.getActiveSessionsByUserIDReturnsOnCall[len(fake.getActiveSessionsByUserIDArgsForCall)]
+	fake.getActiveSessionsByUserIDArgsForCall = append(fake.getActiveSessionsByUserIDArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}{arg1, arg2})
+	stub := fake.GetActiveSessionsByUserIDStub
+	fakeReturns := fake.getActiveSessionsByUserIDReturns
+	fake.recordInvocation("GetActiveSessionsByUserID", []interface{}{arg1, arg2})
+	fake.getActiveSessionsByUserIDMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeSessionRepository) GetActiveSessionsByUserIDCallCount() int {
+	fake.getActiveSessionsByUserIDMutex.RLock()
+	defer fake.getActiveSessionsByUserIDMutex.RUnlock()
+	return len(fake.getActiveSessionsByUserIDArgsForCall)
+}
+
+func (fake *FakeSessionRepository) GetActiveSessionsByUserIDCalls(stub func(context.Context, uuid.UUID) ([]domain.Session, error)) {
+	fake.getActiveSessionsByUserIDMutex.Lock()
+	defer fake.getActiveSessionsByUserIDMutex.Unlock()
+	fake.GetActiveSessionsByUserIDStub = stub
+}
+
+func (fake *FakeSessionRepository) GetActiveSessionsByUserIDArgsForCall(i int) (context.Context, uuid.UUID) {
+	fake.getActiveSessionsByUserIDMutex.RLock()
+	defer fake.getActiveSessionsByUserIDMutex.RUnlock()
+	argsForCall := fake.getActiveSessionsByUserIDArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeSessionRepository) GetActiveSessionsByUserIDReturns(result1 []domain.Session, result2 error) {
+	fake.getActiveSessionsByUserIDMutex.Lock()
+	defer fake.getActiveSessionsByUserIDMutex.Unlock()
+	fake.GetActiveSessionsByUserIDStub = nil
+	fake.getActiveSessionsByUserIDReturns = struct {
+		result1 []domain.Session
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeSessionRepository) GetActiveSessionsByUserIDReturnsOnCall(i int, result1 []domain.Session, result2 error) {
+	fake.getActiveSessionsByUserIDMutex.Lock()
+	defer fake.getActiveSessionsByUserIDMutex.Unlock()
+	fake.GetActiveSessionsByUserIDStub = nil
+	if fake.getActiveSessionsByUserIDReturnsOnCall == nil {
+		fake.getActiveSessionsByUserIDReturnsOnCall = make(map[int]struct {
+			result1 []domain.Session
+			result2 error
+		})
+	}
+	fake.getActiveSessionsByUserIDReturnsOnCall[i] = struct {
+		result1 []domain.Session
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeSessionRepository) GetSessionByID(arg1 context.Context, arg2 uuid.UUID) (*domain.Session, error) {
 	fake.getSessionByIDMutex.Lock()
 	ret, specificReturn := fake.getSessionByIDReturnsOnCall[len(fake.getSessionByIDArgsForCall)]
@@ -400,19 +580,155 @@ func (fake *FakeSessionRepository) GetSessionByRefreshTokenReturnsOnCall(i int, 
 	}{result1, result2}
 }
 
+func (fake *FakeSessionRepository) UpdateRefreshToken(arg1 context.Context, arg2 uuid.UUID, arg3 string) (*domain.Session, error) {
+	fake.updateRefreshTokenMutex.Lock()
+	ret, specificReturn := fake.updateRefreshTokenReturnsOnCall[len(fake.updateRefreshTokenArgsForCall)]
+	fake.updateRefreshTokenArgsForCall = append(fake.updateRefreshTokenArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+		arg3 string
+	}{arg1, arg2, arg3})
+	stub := fake.UpdateRefreshTokenStub
+	fakeReturns := fake.updateRefreshTokenReturns
+	fake.recordInvocation("UpdateRefreshToken", []interface{}{arg1, arg2, arg3})
+	fake.updateRefreshTokenMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeSessionRepository) UpdateRefreshTokenCallCount() int {
+	fake.updateRefreshTokenMutex.RLock()
+	defer fake.updateRefreshTokenMutex.RUnlock()
+	return len(fake.updateRefreshTokenArgsForCall)
+}
+
+func (fake *FakeSessionRepository) UpdateRefreshTokenCalls(stub func(context.Context, uuid.UUID, string) (*domain.Session, error)) {
+	fake.updateRefreshTokenMutex.Lock()
+	defer fake.updateRefreshTokenMutex.Unlock()
+	fake.UpdateRefreshTokenStub = stub
+}
+
+func (fake *FakeSessionRepository) UpdateRefreshTokenArgsForCall(i int) (context.Context, uuid.UUID, string) {
+	fake.updateRefreshTokenMutex.RLock()
+	defer fake.updateRefreshTokenMutex.RUnlock()
+	argsForCall := fake.updateRefreshTokenArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeSessionRepository) UpdateRefreshTokenReturns(result1 *domain.Session, result2 error) {
+	fake.updateRefreshTokenMutex.Lock()
+	defer fake.updateRefreshTokenMutex.Unlock()
+	fake.UpdateRefreshTokenStub = nil
+	fake.updateRefreshTokenReturns = struct {
+		result1 *domain.Session
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeSessionRepository) UpdateRefreshTokenReturnsOnCall(i int, result1 *domain.Session, result2 error) {
+	fake.updateRefreshTokenMutex.Lock()
+	defer fake.updateRefreshTokenMutex.Unlock()
+	fake.UpdateRefreshTokenStub = nil
+	if fake.updateRefreshTokenReturnsOnCall == nil {
+		fake.updateRefreshTokenReturnsOnCall = make(map[int]struct {
+			result1 *domain.Session
+			result2 error
+		})
+	}
+	fake.updateRefreshTokenReturnsOnCall[i] = struct {
+		result1 *domain.Session
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeSessionRepository) UpdateSession(arg1 context.Context, arg2 domain.Session) error {
+	fake.updateSessionMutex.Lock()
+	ret, specificReturn := fake.updateSessionReturnsOnCall[len(fake.updateSessionArgsForCall)]
+	fake.updateSessionArgsForCall = append(fake.updateSessionArgsForCall, struct {
+		arg1 context.Context
+		arg2 domain.Session
+	}{arg1, arg2})
+	stub := fake.UpdateSessionStub
+	fakeReturns := fake.updateSessionReturns
+	fake.recordInvocation("UpdateSession", []interface{}{arg1, arg2})
+	fake.updateSessionMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeSessionRepository) UpdateSessionCallCount() int {
+	fake.updateSessionMutex.RLock()
+	defer fake.updateSessionMutex.RUnlock()
+	return len(fake.updateSessionArgsForCall)
+}
+
+func (fake *FakeSessionRepository) UpdateSessionCalls(stub func(context.Context, domain.Session) error) {
+	fake.updateSessionMutex.Lock()
+	defer fake.updateSessionMutex.Unlock()
+	fake.UpdateSessionStub = stub
+}
+
+func (fake *FakeSessionRepository) UpdateSessionArgsForCall(i int) (context.Context, domain.Session) {
+	fake.updateSessionMutex.RLock()
+	defer fake.updateSessionMutex.RUnlock()
+	argsForCall := fake.updateSessionArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeSessionRepository) UpdateSessionReturns(result1 error) {
+	fake.updateSessionMutex.Lock()
+	defer fake.updateSessionMutex.Unlock()
+	fake.UpdateSessionStub = nil
+	fake.updateSessionReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeSessionRepository) UpdateSessionReturnsOnCall(i int, result1 error) {
+	fake.updateSessionMutex.Lock()
+	defer fake.updateSessionMutex.Unlock()
+	fake.UpdateSessionStub = nil
+	if fake.updateSessionReturnsOnCall == nil {
+		fake.updateSessionReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.updateSessionReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeSessionRepository) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
+	fake.blockAllUserSessionsMutex.RLock()
+	defer fake.blockAllUserSessionsMutex.RUnlock()
 	fake.blockSessionMutex.RLock()
 	defer fake.blockSessionMutex.RUnlock()
 	fake.createSessionMutex.RLock()
 	defer fake.createSessionMutex.RUnlock()
 	fake.deleteSessionMutex.RLock()
 	defer fake.deleteSessionMutex.RUnlock()
+	fake.getActiveSessionsByUserIDMutex.RLock()
+	defer fake.getActiveSessionsByUserIDMutex.RUnlock()
 	fake.getSessionByIDMutex.RLock()
 	defer fake.getSessionByIDMutex.RUnlock()
 	fake.getSessionByRefreshTokenMutex.RLock()
 	defer fake.getSessionByRefreshTokenMutex.RUnlock()
+	fake.updateRefreshTokenMutex.RLock()
+	defer fake.updateRefreshTokenMutex.RUnlock()
+	fake.updateSessionMutex.RLock()
+	defer fake.updateSessionMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

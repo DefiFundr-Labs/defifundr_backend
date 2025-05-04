@@ -39,6 +39,44 @@ type FakeUserRepository struct {
 		result1 *domain.User
 		result2 error
 	}
+	DeactivateUserStub        func(context.Context, uuid.UUID) error
+	deactivateUserMutex       sync.RWMutex
+	deactivateUserArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}
+	deactivateUserReturns struct {
+		result1 error
+	}
+	deactivateUserReturnsOnCall map[int]struct {
+		result1 error
+	}
+	DeleteUserStub        func(context.Context, uuid.UUID) error
+	deleteUserMutex       sync.RWMutex
+	deleteUserArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}
+	deleteUserReturns struct {
+		result1 error
+	}
+	deleteUserReturnsOnCall map[int]struct {
+		result1 error
+	}
+	GetMFASecretStub        func(context.Context, uuid.UUID) (string, error)
+	getMFASecretMutex       sync.RWMutex
+	getMFASecretArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}
+	getMFASecretReturns struct {
+		result1 string
+		result2 error
+	}
+	getMFASecretReturnsOnCall map[int]struct {
+		result1 string
+		result2 error
+	}
 	GetUserByEmailStub        func(context.Context, string) (*domain.User, error)
 	getUserByEmailMutex       sync.RWMutex
 	getUserByEmailArgsForCall []struct {
@@ -66,6 +104,19 @@ type FakeUserRepository struct {
 	getUserByIDReturnsOnCall map[int]struct {
 		result1 *domain.User
 		result2 error
+	}
+	SetMFASecretStub        func(context.Context, uuid.UUID, string) error
+	setMFASecretMutex       sync.RWMutex
+	setMFASecretArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+		arg3 string
+	}
+	setMFASecretReturns struct {
+		result1 error
+	}
+	setMFASecretReturnsOnCall map[int]struct {
+		result1 error
 	}
 	UpdatePasswordStub        func(context.Context, uuid.UUID, string) error
 	updatePasswordMutex       sync.RWMutex
@@ -270,6 +321,195 @@ func (fake *FakeUserRepository) CreateUserReturnsOnCall(i int, result1 *domain.U
 	}{result1, result2}
 }
 
+func (fake *FakeUserRepository) DeactivateUser(arg1 context.Context, arg2 uuid.UUID) error {
+	fake.deactivateUserMutex.Lock()
+	ret, specificReturn := fake.deactivateUserReturnsOnCall[len(fake.deactivateUserArgsForCall)]
+	fake.deactivateUserArgsForCall = append(fake.deactivateUserArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}{arg1, arg2})
+	stub := fake.DeactivateUserStub
+	fakeReturns := fake.deactivateUserReturns
+	fake.recordInvocation("DeactivateUser", []interface{}{arg1, arg2})
+	fake.deactivateUserMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeUserRepository) DeactivateUserCallCount() int {
+	fake.deactivateUserMutex.RLock()
+	defer fake.deactivateUserMutex.RUnlock()
+	return len(fake.deactivateUserArgsForCall)
+}
+
+func (fake *FakeUserRepository) DeactivateUserCalls(stub func(context.Context, uuid.UUID) error) {
+	fake.deactivateUserMutex.Lock()
+	defer fake.deactivateUserMutex.Unlock()
+	fake.DeactivateUserStub = stub
+}
+
+func (fake *FakeUserRepository) DeactivateUserArgsForCall(i int) (context.Context, uuid.UUID) {
+	fake.deactivateUserMutex.RLock()
+	defer fake.deactivateUserMutex.RUnlock()
+	argsForCall := fake.deactivateUserArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeUserRepository) DeactivateUserReturns(result1 error) {
+	fake.deactivateUserMutex.Lock()
+	defer fake.deactivateUserMutex.Unlock()
+	fake.DeactivateUserStub = nil
+	fake.deactivateUserReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeUserRepository) DeactivateUserReturnsOnCall(i int, result1 error) {
+	fake.deactivateUserMutex.Lock()
+	defer fake.deactivateUserMutex.Unlock()
+	fake.DeactivateUserStub = nil
+	if fake.deactivateUserReturnsOnCall == nil {
+		fake.deactivateUserReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.deactivateUserReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeUserRepository) DeleteUser(arg1 context.Context, arg2 uuid.UUID) error {
+	fake.deleteUserMutex.Lock()
+	ret, specificReturn := fake.deleteUserReturnsOnCall[len(fake.deleteUserArgsForCall)]
+	fake.deleteUserArgsForCall = append(fake.deleteUserArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}{arg1, arg2})
+	stub := fake.DeleteUserStub
+	fakeReturns := fake.deleteUserReturns
+	fake.recordInvocation("DeleteUser", []interface{}{arg1, arg2})
+	fake.deleteUserMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeUserRepository) DeleteUserCallCount() int {
+	fake.deleteUserMutex.RLock()
+	defer fake.deleteUserMutex.RUnlock()
+	return len(fake.deleteUserArgsForCall)
+}
+
+func (fake *FakeUserRepository) DeleteUserCalls(stub func(context.Context, uuid.UUID) error) {
+	fake.deleteUserMutex.Lock()
+	defer fake.deleteUserMutex.Unlock()
+	fake.DeleteUserStub = stub
+}
+
+func (fake *FakeUserRepository) DeleteUserArgsForCall(i int) (context.Context, uuid.UUID) {
+	fake.deleteUserMutex.RLock()
+	defer fake.deleteUserMutex.RUnlock()
+	argsForCall := fake.deleteUserArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeUserRepository) DeleteUserReturns(result1 error) {
+	fake.deleteUserMutex.Lock()
+	defer fake.deleteUserMutex.Unlock()
+	fake.DeleteUserStub = nil
+	fake.deleteUserReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeUserRepository) DeleteUserReturnsOnCall(i int, result1 error) {
+	fake.deleteUserMutex.Lock()
+	defer fake.deleteUserMutex.Unlock()
+	fake.DeleteUserStub = nil
+	if fake.deleteUserReturnsOnCall == nil {
+		fake.deleteUserReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.deleteUserReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeUserRepository) GetMFASecret(arg1 context.Context, arg2 uuid.UUID) (string, error) {
+	fake.getMFASecretMutex.Lock()
+	ret, specificReturn := fake.getMFASecretReturnsOnCall[len(fake.getMFASecretArgsForCall)]
+	fake.getMFASecretArgsForCall = append(fake.getMFASecretArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}{arg1, arg2})
+	stub := fake.GetMFASecretStub
+	fakeReturns := fake.getMFASecretReturns
+	fake.recordInvocation("GetMFASecret", []interface{}{arg1, arg2})
+	fake.getMFASecretMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeUserRepository) GetMFASecretCallCount() int {
+	fake.getMFASecretMutex.RLock()
+	defer fake.getMFASecretMutex.RUnlock()
+	return len(fake.getMFASecretArgsForCall)
+}
+
+func (fake *FakeUserRepository) GetMFASecretCalls(stub func(context.Context, uuid.UUID) (string, error)) {
+	fake.getMFASecretMutex.Lock()
+	defer fake.getMFASecretMutex.Unlock()
+	fake.GetMFASecretStub = stub
+}
+
+func (fake *FakeUserRepository) GetMFASecretArgsForCall(i int) (context.Context, uuid.UUID) {
+	fake.getMFASecretMutex.RLock()
+	defer fake.getMFASecretMutex.RUnlock()
+	argsForCall := fake.getMFASecretArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeUserRepository) GetMFASecretReturns(result1 string, result2 error) {
+	fake.getMFASecretMutex.Lock()
+	defer fake.getMFASecretMutex.Unlock()
+	fake.GetMFASecretStub = nil
+	fake.getMFASecretReturns = struct {
+		result1 string
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeUserRepository) GetMFASecretReturnsOnCall(i int, result1 string, result2 error) {
+	fake.getMFASecretMutex.Lock()
+	defer fake.getMFASecretMutex.Unlock()
+	fake.GetMFASecretStub = nil
+	if fake.getMFASecretReturnsOnCall == nil {
+		fake.getMFASecretReturnsOnCall = make(map[int]struct {
+			result1 string
+			result2 error
+		})
+	}
+	fake.getMFASecretReturnsOnCall[i] = struct {
+		result1 string
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeUserRepository) GetUserByEmail(arg1 context.Context, arg2 string) (*domain.User, error) {
 	fake.getUserByEmailMutex.Lock()
 	ret, specificReturn := fake.getUserByEmailReturnsOnCall[len(fake.getUserByEmailArgsForCall)]
@@ -398,6 +638,69 @@ func (fake *FakeUserRepository) GetUserByIDReturnsOnCall(i int, result1 *domain.
 		result1 *domain.User
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeUserRepository) SetMFASecret(arg1 context.Context, arg2 uuid.UUID, arg3 string) error {
+	fake.setMFASecretMutex.Lock()
+	ret, specificReturn := fake.setMFASecretReturnsOnCall[len(fake.setMFASecretArgsForCall)]
+	fake.setMFASecretArgsForCall = append(fake.setMFASecretArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+		arg3 string
+	}{arg1, arg2, arg3})
+	stub := fake.SetMFASecretStub
+	fakeReturns := fake.setMFASecretReturns
+	fake.recordInvocation("SetMFASecret", []interface{}{arg1, arg2, arg3})
+	fake.setMFASecretMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeUserRepository) SetMFASecretCallCount() int {
+	fake.setMFASecretMutex.RLock()
+	defer fake.setMFASecretMutex.RUnlock()
+	return len(fake.setMFASecretArgsForCall)
+}
+
+func (fake *FakeUserRepository) SetMFASecretCalls(stub func(context.Context, uuid.UUID, string) error) {
+	fake.setMFASecretMutex.Lock()
+	defer fake.setMFASecretMutex.Unlock()
+	fake.SetMFASecretStub = stub
+}
+
+func (fake *FakeUserRepository) SetMFASecretArgsForCall(i int) (context.Context, uuid.UUID, string) {
+	fake.setMFASecretMutex.RLock()
+	defer fake.setMFASecretMutex.RUnlock()
+	argsForCall := fake.setMFASecretArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeUserRepository) SetMFASecretReturns(result1 error) {
+	fake.setMFASecretMutex.Lock()
+	defer fake.setMFASecretMutex.Unlock()
+	fake.SetMFASecretStub = nil
+	fake.setMFASecretReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeUserRepository) SetMFASecretReturnsOnCall(i int, result1 error) {
+	fake.setMFASecretMutex.Lock()
+	defer fake.setMFASecretMutex.Unlock()
+	fake.SetMFASecretStub = nil
+	if fake.setMFASecretReturnsOnCall == nil {
+		fake.setMFASecretReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.setMFASecretReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeUserRepository) UpdatePassword(arg1 context.Context, arg2 uuid.UUID, arg3 string) error {
@@ -730,10 +1033,18 @@ func (fake *FakeUserRepository) Invocations() map[string][][]interface{} {
 	defer fake.checkEmailExistsMutex.RUnlock()
 	fake.createUserMutex.RLock()
 	defer fake.createUserMutex.RUnlock()
+	fake.deactivateUserMutex.RLock()
+	defer fake.deactivateUserMutex.RUnlock()
+	fake.deleteUserMutex.RLock()
+	defer fake.deleteUserMutex.RUnlock()
+	fake.getMFASecretMutex.RLock()
+	defer fake.getMFASecretMutex.RUnlock()
 	fake.getUserByEmailMutex.RLock()
 	defer fake.getUserByEmailMutex.RUnlock()
 	fake.getUserByIDMutex.RLock()
 	defer fake.getUserByIDMutex.RUnlock()
+	fake.setMFASecretMutex.RLock()
+	defer fake.setMFASecretMutex.RUnlock()
 	fake.updatePasswordMutex.RLock()
 	defer fake.updatePasswordMutex.RUnlock()
 	fake.updateUserMutex.RLock()

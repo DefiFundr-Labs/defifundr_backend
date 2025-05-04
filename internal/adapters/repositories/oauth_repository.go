@@ -1,104 +1,190 @@
+// repositories/oauth_repository.go
 package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
-	db "github.com/demola234/defifundr/db/sqlc"
-	"github.com/demola234/defifundr/internal/core/domain"
-
 	"github.com/MicahParks/keyfunc"
+	db "github.com/demola234/defifundr/db/sqlc"
+	"github.com/demola234/defifundr/infrastructure/common/logging"
+	"github.com/demola234/defifundr/internal/core/domain"
 	jwtv4 "github.com/golang-jwt/jwt/v4"
 )
 
 type OAuthRepository struct {
-	store db.Queries
+	store       db.Queries
+	logger      logging.Logger
+	jwksCache   map[string]*keyfunc.JWKS
+	cacheExpiry map[string]time.Time
+	cacheMutex  sync.RWMutex
 }
 
-func NewOAuthRepository(store db.Queries) *OAuthRepository {
-	return &OAuthRepository{store: store}
+func NewOAuthRepository(store db.Queries, logger logging.Logger) *OAuthRepository {
+	return &OAuthRepository{
+		store:       store,
+		logger:      logger,
+		jwksCache:   make(map[string]*keyfunc.JWKS),
+		cacheExpiry: make(map[string]time.Time),
+	}
 }
 
+// getJWKS retrieves and caches a JWKS for token validation
+func (r *OAuthRepository) getJWKS(jwksURL string) (*keyfunc.JWKS, error) {
+	// Check cache first with read lock
+	r.cacheMutex.RLock()
+	jwks, found := r.jwksCache[jwksURL]
+	expiry, _ := r.cacheExpiry[jwksURL]
+	r.cacheMutex.RUnlock()
 
+	// Return cached JWKS if still valid
+	if found && time.Now().Before(expiry) {
+		return jwks, nil
+	}
 
-func (r *OAuthRepository) ValidateWebAuthToken(ctx context.Context, tokenString string) (*domain.Web3AuthClaims, error) {
-	// Use the correct JWKS URL
-	jwksURL := "https://api-auth.web3auth.io/jwks"
-	jwks, err := keyfunc.Get(jwksURL, keyfunc.Options{
+	// Acquire write lock to update cache
+	r.cacheMutex.Lock()
+	defer r.cacheMutex.Unlock()
+
+	// Double-check after acquiring lock
+	jwks, found = r.jwksCache[jwksURL]
+	expiry, _ = r.cacheExpiry[jwksURL]
+	if found && time.Now().Before(expiry) {
+		return jwks, nil
+	}
+
+	// Fetch new JWKS
+	options := keyfunc.Options{
 		RefreshInterval: time.Hour,
-		// Add error handler for debugging
 		RefreshErrorHandler: func(err error) {
-			fmt.Printf("Error refreshing JWKS: %v\n", err)
+			r.logger.Error("Error refreshing JWKS", err, map[string]interface{}{
+				"jwks_url": jwksURL,
+			})
 		},
-	})
+	}
+
+	newJWKS, err := keyfunc.Get(jwksURL, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get JWKS: %v", err)
 	}
 
-	// Configure the JWT parser to support ES256 algorithm
-	parser := jwtv4.NewParser(jwtv4.WithValidMethods([]string{"ES256"}))
+	// Update cache
+	r.jwksCache[jwksURL] = newJWKS
+	r.cacheExpiry[jwksURL] = time.Now().Add(time.Hour)
 
-	// Parse the token using JWT v4 with structured claims
-	claims := &domain.Web3AuthClaims{}
-	token, err := parser.ParseWithClaims(tokenString, claims, jwks.Keyfunc)
+	return newJWKS, nil
+}
+
+// ValidateWebAuthToken validates a Web3Auth token
+func (r *OAuthRepository) ValidateWebAuthToken(ctx context.Context, tokenString string) (*domain.Web3AuthClaims, error) {
+	jwksURL := "https://api-auth.web3auth.io/jwks"
+	jwks, err := r.getJWKS(jwksURL)
 	if err != nil {
+		return nil, fmt.Errorf("failed to get JWKS: %v", err)
+	}
+
+	// Parse the token with claims
+	claims := &domain.Web3AuthClaims{}
+	parser := jwtv4.NewParser(jwtv4.WithValidMethods([]string{"ES256"}))
+	token, err := parser.ParseWithClaims(tokenString, claims, jwks.Keyfunc)
+
+	if err != nil {
+		if strings.Contains(err.Error(), "expired") {
+			return nil, errors.New("token has expired, please re-authenticate")
+		}
 		return nil, fmt.Errorf("failed to parse token: %v", err)
 	}
 
 	if !token.Valid {
-		return nil, fmt.Errorf("invalid token")
+		return nil, errors.New("invalid token")
 	}
 
-	// Verify the issuer is Web3Auth
+	// Verify required claims
+	if claims.Verifier == "" || claims.VerifierID == "" {
+		return nil, errors.New("missing required Web3Auth claims")
+	}
+
+	// Verify the issuer
 	if claims.Issuer != "https://api-auth.web3auth.io" {
 		return nil, fmt.Errorf("invalid issuer: %v", claims.Issuer)
 	}
 
+	// Log successful validation
+	r.logger.Info("Successfully validated Web3Auth token", map[string]interface{}{
+		"email":        claims.Email,
+		"verifier":     claims.Verifier,
+		"wallet_count": len(claims.Wallets),
+	})
+
 	return claims, nil
 }
 
-// Update GetUserInfo to work with the new return type
-func (r *OAuthRepository) GetUserInfo(ctx context.Context, token string) (*domain.User, error) {
-	// Validate the token first
-	claims, err := r.ValidateWebAuthToken(ctx, token)
-	if err != nil {
-		return nil, err
+// GetUserInfoFromProviderToken extracts user information from an OAuth provider token
+func (r *OAuthRepository) GetUserInfoFromProviderToken(ctx context.Context, provider string, token string) (*domain.User, error) {
+	// For Web3Auth, validate token first
+	if provider == string(domain.Web3AuthProvider) {
+		claims, err := r.ValidateWebAuthToken(ctx, token)
+		if err != nil {
+			return nil, err
+		}
+
+		// Extract name parts
+		firstName, lastName := extractNameFromClaims(claims)
+
+		// Create user object with information from claims
+		profileImage := claims.ProfileImage
+		user := &domain.User{
+			Email:          claims.Email,
+			FirstName:      firstName,
+			LastName:       lastName,
+			ProfilePicture: &profileImage,
+			AuthProvider:   string(mapVerifierToProvider(claims.Verifier)),
+			ProviderID:     claims.VerifierID,
+		}
+
+		return user, nil
 	}
 
-	// Extract user info from claims
-	email := claims.Email
-	if email == "" {
-		return nil, fmt.Errorf("email not found in token claims")
+	// For other providers, implement specific token validation
+	return nil, fmt.Errorf("unsupported provider: %s", provider)
+}
+
+// Helper function to extract name from claims
+func extractNameFromClaims(claims *domain.Web3AuthClaims) (string, string) {
+	if claims.Name == "" {
+		return "User", ""
 	}
 
-	// Get additional user info from repository if needed
-	user, err := r.GetUserInfo(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user info: %v", err)
+	nameParts := strings.Split(claims.Name, " ")
+	firstName := nameParts[0]
+
+	var lastName string
+	if len(nameParts) > 1 {
+		lastName = strings.Join(nameParts[1:], " ")
 	}
 
-	// Combine claims with user data
-	returnedUser := &domain.User{
-		ID:                  user.ID,
-		Email:               user.Email,
-		AccountType:         user.AccountType,
-		FirstName:           user.FirstName,
-		LastName:            user.LastName,
-		PersonalAccountType: user.PersonalAccountType,
-		Gender:              user.Gender,
-		Nationality:         user.Nationality,
-		ResidentialCountry:  user.ResidentialCountry,
-		JobRole:             user.JobRole,
-		ProfilePicture:      user.ProfilePicture,
-		Address:             user.CompanyAddress,
-		City:                user.CompanyCity,
-		PostalCode:          user.CompanyPostalCode,
-		AuthProvider:        user.AuthProvider,
-		ProviderID:          user.ProviderID,
-		CompanyWebsite:      user.CompanyWebsite,
-		EmploymentType:      user.EmploymentType,
+	return firstName, lastName
+}
+
+// Helper function to map Web3Auth verifier to provider
+func mapVerifierToProvider(verifier string) domain.AuthProvider {
+	lowerVerifier := strings.ToLower(verifier)
+
+	if strings.Contains(lowerVerifier, "google") {
+		return domain.GoogleProvider
+	} else if strings.Contains(lowerVerifier, "facebook") {
+		return domain.FacebookProvider
+	} else if strings.Contains(lowerVerifier, "apple") {
+		return domain.AppleProvider
+	} else if strings.Contains(lowerVerifier, "twitter") {
+		return domain.TwitterProvider
+	} else if strings.Contains(lowerVerifier, "discord") {
+		return domain.DiscordProvider
 	}
 
-	return returnedUser, nil
+	return domain.Web3AuthProvider
 }

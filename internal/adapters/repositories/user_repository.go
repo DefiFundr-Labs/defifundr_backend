@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+
 // UserRepository struct implements the repository interface for users
 type UserRepository struct {
 	store db.Queries
@@ -194,10 +195,6 @@ func mapDBUserToDomainUser(dbUser db.Users) *domain.User {
 	}
 }
 
-// UpdateUserPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error)
-// UpdateUserBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error)
-// UpdateUserAddressDetails(ctx context.Context, user domain.User) (*domain.User, error)
-
 func (r *UserRepository) UpdateUserPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error) {
 	params := db.UpdateUserPersonalDetailsParams{
 		ID:                  user.ID,
@@ -260,3 +257,77 @@ func toPgTextPtr(s *string) pgtype.Text {
 	}
 	return pgtype.Text{String: *s, Valid: true}
 }
+
+
+// DeactivateUser marks a user as inactive
+func (r *UserRepository) DeactivateUser(ctx context.Context, id uuid.UUID) error {
+    // // Use UpdateUserIsActiveStatus method from the store
+    // params := db.UpdateUserIsActiveStatusParams{
+    //     ID:      id,
+    //     IsActive: false,
+    // }
+    
+    // return r.store.UpdateUserIsActiveStatus(ctx, params)
+	panic("implementation")
+}
+
+// DeleteUser removes a user from the database
+func (r *UserRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
+    return r.store.DeleteUser(ctx, id)
+}
+
+// SetMFASecret sets the MFA secret for a user
+func (r *UserRepository) SetMFASecret(ctx context.Context, userID uuid.UUID, secret string) error {
+    // params := db.UpdateUserMFASecretParams{
+    //     ID:       userID,
+    //     MfaSecret: pgtype.Text{String: secret, Valid: true},
+    // }
+    
+    // return r.store.UpdateUserMFASecret(ctx, params)
+		panic("implementation")
+}
+
+// GetMFASecret retrieves the MFA secret for a user
+func (r *UserRepository) GetMFASecret(ctx context.Context, userID uuid.UUID) (string, error) {
+    // // Get the user from the database
+    // dbUser, err := r.store.GetUser(ctx, userID)
+    // if err != nil {
+    //     return "", err
+    // }
+    
+    // // Check if MFA secret exists
+    // if !dbUser.MfaSecret.Valid {
+    //     return "", nil
+    // }
+    
+    // return dbUser.MfaSecret.String, nil
+		panic("implementation")
+}
+
+// Fix the UpdatePassword method to match the interface signature
+// UpdatePassword updates a user's password after verifying the old password
+// func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
+    // // First get the user to verify the old password
+    // dbUser, err := r.store.GetUser(ctx, userID)
+    // if err != nil {
+    //     return err
+    // }
+    
+    // // Here you would typically verify that oldPassword matches the stored hash
+    // // This would require a password verification function that's not shown in the code
+    // // For example:
+    // // if !verifyPassword(oldPassword, dbUser.PasswordHash.String) {
+    // //     return errors.New("old password does not match")
+    // // }
+    
+    // // Update with the new password hash
+    // params := db.UpdateUserPasswordParams{
+    //     ID:           userID,
+    //     PasswordHash: pgtype.Text{String: newPassword, Valid: true},
+    // }
+    
+    // return r.store.UpdateUserPassword(ctx, params)
+
+// 		panic("implementation")
+
+// }

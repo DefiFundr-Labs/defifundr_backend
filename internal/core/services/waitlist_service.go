@@ -32,7 +32,7 @@ func (s *waitlistService) JoinWaitlist(ctx context.Context, email, fullName, ref
 	// Check if email is already on waitlist
 	existingEntry, err := s.waitlistRepo.GetWaitlistEntryByEmail(ctx, email)
 	if err == nil && existingEntry != nil {
-		return nil, app_errors.NewConflictError("Email already on waitlist")
+		return nil, appErrors.NewConflictError("Email already on waitlist")
 	}
 	// Generate a unique referral code
 	referralCode := generateReferralCode(fullName)
@@ -93,7 +93,7 @@ func (s *waitlistService) GetWaitlistPosition(ctx context.Context, id uuid.UUID)
 		}
 	}
 
-	return 0, app_errors.NewNotFoundError("Entry not found in waitlist")
+	return 0, appErrors.NewNotFoundError("Entry not found in waitlist")
 }
 
 
@@ -151,7 +151,7 @@ func (s *waitlistService) ExportWaitlist(ctx context.Context) ([]byte, error) {
 func (s *waitlistService) GetWaitlistEntryByID(ctx context.Context, id uuid.UUID) (*domain.WaitlistEntry, error) {
 	entry, err := s.waitlistRepo.GetWaitlistEntryByID(ctx, id)
 	if err != nil {
-		return nil, app_errors.NewNotFoundError("Waitlist entry not found")
+		return nil, appErrors.NewNotFoundError("Waitlist entry not found")
 	}
 	return entry, nil
 }

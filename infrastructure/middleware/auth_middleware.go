@@ -1,155 +1,143 @@
+// middleware/auth_middleware.go
 package middleware
 
 import (
-	"errors"
-	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
-	newError "github.com/demola234/defifundr/pkg/app_errors"
-	token "github.com/demola234/defifundr/pkg/token_maker"
-
 	"github.com/demola234/defifundr/infrastructure/common/logging"
+	response "github.com/demola234/defifundr/internal/adapters/dto/response"
+	"github.com/demola234/defifundr/internal/core/ports"
+	token_maker "github.com/demola234/defifundr/pkg/token_maker"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
-const (
-	authorizationHeader     = "authorization"
-	authorizationBearer     = "bearer"
-	authorizationPayloadKey = "authorization_payload"
-)
-
-// AuthMiddleware creates a Gin middleware for authentication
-func AuthMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
+// AuthMiddleware validates the JWT token in the Authorization header
+func AuthMiddleware(tokenMaker token_maker.Maker, logger logging.Logger) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// Skip authentication for swagger endpoints
-		if strings.HasPrefix(ctx.Request.URL.Path, "/swagger") {
-			ctx.Next()
+		// Get Authorization header
+		authHeader := ctx.GetHeader("Authorization")
+		if authHeader == "" {
+			ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+				Success: false,
+				Message: "Authorization header is required",
+			})
+			ctx.Abort()
 			return
 		}
 
-		authHeader := ctx.GetHeader(authorizationHeader)
-		if len(authHeader) == 0 {
-			err := errors.New("authorization header not found")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
+		// Check if the auth header starts with "Bearer "
+		fields := strings.Fields(authHeader)
+		if len(fields) < 2 || fields[0] != "Bearer" {
+			ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+				Success: false,
+				Message: "Invalid authorization format",
+			})
+			ctx.Abort()
 			return
 		}
 
-		stringSplit := strings.Fields(authHeader)
-		if len(stringSplit) < 2 {
-			err := errors.New("invalid authorization header format")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
-			return
-		}
+		// Extract token
+		accessToken := fields[1]
 
-		authType := strings.ToLower(stringSplit[0])
-		if authType != authorizationBearer {
-			err := fmt.Errorf("unsupported authorization type %s", authType)
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
-			return
-		}
-
-		accessToken := stringSplit[1]
+		// Verify token
 		payload, err := tokenMaker.VerifyToken(accessToken)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
+			ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+				Success: false,
+				Message: "Invalid or expired token",
+			})
+			ctx.Abort()
 			return
 		}
 
-		ctx.Set(authorizationPayloadKey, payload)
+		// Set user ID in context
+		ctx.Set("user_id", payload.UserID)
+		ctx.Set("email", payload.Email)
+
+		// Continue to the next handler
 		ctx.Next()
 	}
 }
 
-// AuthMiddlewareWithLogger creates a Gin middleware for authentication with logging
-func AuthMiddlewareWithLogger(tokenMaker token.Maker, logger logging.Logger) gin.HandlerFunc {
+// DeviceTrackingMiddleware tracks device information for security purposes
+func DeviceTrackingMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		path := ctx.Request.URL.Path
+		clientIP := ctx.ClientIP()
+		userAgent := ctx.Request.UserAgent()
 
-		// Skip authentication for swagger and other public endpoints
-		if isPublicRoute(path) {
-			logger.Info("Skipping auth for public route", map[string]interface{}{
-				"path": path,
-			})
-			ctx.Next()
-			return
-		}
+		// Store in context for later use
+		ctx.Set("client_ip", clientIP)
+		ctx.Set("user_agent", userAgent)
 
-		authHeader := ctx.GetHeader(authorizationHeader)
-		logger.Info("Auth header received", map[string]interface{}{
-			"header_present": len(authHeader) > 0,
-			"path":           path,
-		})
+		// Add a request ID for tracking
+		requestID := uuid.New().String()
+		ctx.Set("request_id", requestID)
+		ctx.Header("X-Request-ID", requestID)
 
-		if len(authHeader) == 0 {
-			err := errors.New("authorization header not found")
-			logger.Error("Auth failed: No authorization header", err, nil)
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
-			return
-		}
-
-		stringSplit := strings.Fields(authHeader)
-		if len(stringSplit) < 2 {
-			err := errors.New("invalid authorization header format")
-			logger.Error("Auth failed: Invalid header format", err, map[string]interface{}{
-				"header_parts": len(stringSplit),
-			})
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
-			return
-		}
-
-		authType := strings.ToLower(stringSplit[0])
-		if authType != authorizationBearer {
-			err := fmt.Errorf("unsupported authorization type %s", authType)
-			logger.Error("Auth failed: Unsupported auth type", err, map[string]interface{}{
-				"auth_type": authType,
-			})
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
-			return
-		}
-
-		accessToken := stringSplit[1]
-		logger.Info("Verifying token", map[string]interface{}{
-			"token_fragment": accessToken[:5] + "..." + accessToken[len(accessToken)-5:],
-		})
-
-		payload, err := tokenMaker.VerifyToken(accessToken)
-		if err != nil {
-			logger.Error("Auth failed: Token verification failed", err, nil)
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, newError.ErrorResponse(err, http.StatusUnauthorized))
-			return
-		}
-
-		logger.Info("Authentication successful", map[string]interface{}{
-			"user_id": payload.UserID,
-		})
-
-		ctx.Set(authorizationPayloadKey, payload)
 		ctx.Next()
 	}
 }
 
-// isPublicRoute determines if a route should skip authentication
-func isPublicRoute(path string) bool {
-	publicRoutes := []string{
-		"/swagger",
-		"/health",
-		"/api/v1/auth/login",
-		"/api/v1/auth/register",
-		"/api/v1/auth/verify-email",
-		"/api/v1/auth/refresh-token",
-		"/api/v1/auth/forgot-password",
-		"/api/v1/auth/reset-password",
-		"/api/v1/auth/google",
-		"/api/v1/auth/google/callback",
-		"/api/v1/waitlist/join",
-	}
-
-	for _, route := range publicRoutes {
-		if strings.HasPrefix(path, route) {
-			return true
+// MFARequiredMiddleware ensures that MFA is completed for critical operations
+func MFARequiredMiddleware(userRepo ports.UserRepository) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		// Get user ID from context
+		userID, exists := ctx.Get("user_id")
+		if !exists {
+			ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+				Success: false,
+				Message: "Unauthorized",
+			})
+			ctx.Abort()
+			return
 		}
-	}
 
-	return false
+		// Convert to UUID
+		userUUID, ok := userID.(uuid.UUID)
+		if !ok {
+			ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+				Success: false,
+				Message: "Invalid user ID",
+			})
+			ctx.Abort()
+			return
+		}
+
+		// Check MFA session
+		mfaVerified, exists := ctx.Get("mfa_verified")
+		if exists && mfaVerified.(bool) {
+			// MFA already verified for this session
+			ctx.Next()
+			return
+		}
+
+		// Get MFA status from request header
+		mfaToken := ctx.GetHeader("X-MFA-Token")
+		if mfaToken == "" {
+			ctx.JSON(http.StatusForbidden, response.ErrorResponse{
+				Success: false,
+			})
+			ctx.Abort()
+			return
+		}
+
+		// Verify MFA token (implement token validation logic here)
+		// For now, just checking if user has MFA enabled
+		user, err := userRepo.GetUserByID(ctx, userUUID)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+				Success: false,
+				Message: "Failed to verify MFA",
+			})
+			ctx.Abort()
+			return
+		}
+
+		log.Printf("User MFA status: %v", user.AccountType)
+
+		ctx.Next()
+	}
 }

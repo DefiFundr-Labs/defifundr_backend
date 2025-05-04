@@ -36,11 +36,13 @@ type Querier interface {
 	// Counts the total number of waitlist entries matching filters
 	CountWaitlistEntries(ctx context.Context, arg CountWaitlistEntriesParams) (int64, error)
 	CreateOTPVerification(ctx context.Context, arg CreateOTPVerificationParams) (OtpVerifications, error)
+	CreateSecurityEvent(ctx context.Context, arg CreateSecurityEventParams) (SecurityEvents, error)
 	// Creates a new session and returns the created session record
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Sessions, error)
 	// Creates a new user record and returns the created user
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
 	CreateUserDeviceToken(ctx context.Context, arg CreateUserDeviceTokenParams) (UserDeviceTokens, error)
+	CreateUserWallet(ctx context.Context, arg CreateUserWalletParams) (UserWallets, error)
 	// Creates a new waitlist entry and returns the created entry
 	CreateWaitlistEntry(ctx context.Context, arg CreateWaitlistEntryParams) (Waitlist, error)
 	DeleteExpiredDeviceTokens(ctx context.Context) error
@@ -57,6 +59,7 @@ type Querier interface {
 	DeleteTransactionsByUserID(ctx context.Context, userID uuid.UUID) error
 	// Permanently deletes a user record
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	DeleteUserWallet(ctx context.Context, id uuid.UUID) error
 	// Permanently deletes a waitlist entry
 	DeleteWaitlistEntry(ctx context.Context, id uuid.UUID) error
 	// Retrieves all waitlist entries for export
@@ -69,6 +72,8 @@ type Querier interface {
 	GetDeviceTokensByPlatform(ctx context.Context, arg GetDeviceTokensByPlatformParams) ([]UserDeviceTokens, error)
 	GetOTPVerificationByID(ctx context.Context, id uuid.UUID) (OtpVerifications, error)
 	GetOTPVerificationByUserAndPurpose(ctx context.Context, arg GetOTPVerificationByUserAndPurposeParams) (OtpVerifications, error)
+	GetRecentLoginEventsByUserID(ctx context.Context, arg GetRecentLoginEventsByUserIDParams) ([]SecurityEvents, error)
+	GetSecurityEventsByUserIDAndType(ctx context.Context, arg GetSecurityEventsByUserIDAndTypeParams) ([]SecurityEvents, error)
 	// Retrieves a session by its ID
 	GetSessionByID(ctx context.Context, id uuid.UUID) (Sessions, error)
 	// Retrieves a session by refresh token
@@ -103,6 +108,8 @@ type Querier interface {
 	GetWaitlistStatsBySource(ctx context.Context) ([]GetWaitlistStatsBySourceRow, error)
 	// Gets waitlist statistics grouped by status
 	GetWaitlistStatsByStatus(ctx context.Context) ([]GetWaitlistStatsByStatusRow, error)
+	GetWalletByAddress(ctx context.Context, address string) (UserWallets, error)
+	GetWalletsByUserID(ctx context.Context, userID uuid.UUID) ([]UserWallets, error)
 	InValidateOTP(ctx context.Context, id uuid.UUID) error
 	// Lists users with pagination support
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]Users, error)
@@ -124,6 +131,7 @@ type Querier interface {
 	UpdateRefreshToken(ctx context.Context, arg UpdateRefreshTokenParams) (Sessions, error)
 	// Updates session details
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Sessions, error)
+	UpdateSessionRefreshToken(ctx context.Context, arg UpdateSessionRefreshTokenParams) (Sessions, error)
 	// Updates transaction details and returns the updated transaction
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transactions, error)
 	// Updates the status of a transaction and returns the updated transaction
@@ -144,6 +152,7 @@ type Querier interface {
 	UpdateUserPersonalDetails(ctx context.Context, arg UpdateUserPersonalDetailsParams) (Users, error)
 	// Updates a user's profile information
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (Users, error)
+	UpdateUserWallet(ctx context.Context, arg UpdateUserWalletParams) (UserWallets, error)
 	UpsertUserDeviceToken(ctx context.Context, arg UpsertUserDeviceTokenParams) (UserDeviceTokens, error)
 	VerifyOTP(ctx context.Context, arg VerifyOTPParams) (OtpVerifications, error)
 }

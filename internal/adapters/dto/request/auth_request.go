@@ -7,6 +7,88 @@ import (
 	"time"
 )
 
+// Web3AuthLoginRequest represents the login request for Web3Auth
+type Web3AuthLoginRequest struct {
+	WebAuthToken string `json:"web_auth_token" binding:"required"`
+}
+
+// RefreshTokenRequest represents the request to refresh an access token
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// RegisterPersonalDetailsRequest represents user personal details
+type RegisterPersonalDetailsRequest struct {
+	FirstName           string `json:"first_name" binding:"required"`
+	LastName            string `json:"last_name" binding:"required"`
+	Nationality         string `json:"nationality" binding:"required"`
+	PersonalAccountType string `json:"personal_account_type"`
+	PhoneNumber         string `json:"phone_number"`
+}
+
+// RegisterAddressDetailsRequest represents user address details
+type RegisterAddressDetailsRequest struct {
+	UserAddress string `json:"user_address" binding:"required"`
+	City        string `json:"city" binding:"required"`
+	PostalCode  string `json:"postal_code" binding:"required"`
+	Country     string `json:"country" binding:"required"`
+}
+
+// RegisterBusinessDetailsRequest represents business details
+type RegisterBusinessDetailsRequest struct {
+	CompanyName       string `json:"company_name" binding:"required"`
+	CompanyAddress    string `json:"company_address" binding:"required"`
+	CompanyCity       string `json:"company_city" binding:"required"`
+	CompanyPostalCode string `json:"company_postal_code"`
+	CompanyCountry    string `json:"company_country" binding:"required"`
+	CompanyWebsite    string `json:"company_website"`
+	EmploymentType    string `json:"employment_type"`
+}
+
+// LinkWalletRequest represents the request to link a blockchain wallet
+type LinkWalletRequest struct {
+	Address string `json:"address" binding:"required"`
+	Type    string `json:"type" binding:"required"`
+	Chain   string `json:"chain" binding:"required"`
+}
+
+// RevokeDeviceRequest represents the request to revoke a device
+type RevokeDeviceRequest struct {
+	SessionID string `json:"session_id" binding:"required"`
+}
+
+// LogoutRequest represents the request to logout
+type LogoutRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+// SetupMFARequest represents the request to setup MFA
+type SetupMFARequest struct {
+	// No fields needed, authentication is done through middleware
+}
+
+// VerifyMFARequest represents the request to verify an MFA code
+type VerifyMFARequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+// ResetPasswordRequest represents the request to reset a password
+type ResetPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// ConfirmResetPasswordRequest represents the request to confirm a password reset
+type ConfirmResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+// ChangePasswordRequest represents the request to change a password
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+}
+
 // RegisterRequest represents the user registration request
 type RegisterUserRequest struct {
 	Email        string `json:"email" binding:"omitempty"`
@@ -16,6 +98,22 @@ type RegisterUserRequest struct {
 	Provider     string `json:"provider" binding:"omitempty"`
 	ProviderID   string `json:"provider_id" binding:"omitempty"`
 	WebAuthToken string `json:"web_auth_token" binding:"required"`
+}
+
+type UpdateUserPasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+	OldPassword     string `json:"old_password" binding:"required"`
+}
+
+func (r *UpdateUserPasswordRequest) Validate() error {
+	// Validate password
+	if err := validatePassword(r.NewPassword); err != nil {
+		return err
+	}
+
+	// Additional validations as needed
+	return nil
 }
 
 // Validate validates the register request
@@ -44,96 +142,6 @@ func (r *CheckEmailRequest) Validate() error {
 		return errors.New("invalid email format")
 	}
 	// Additional validations as needed
-	return nil
-}
-
-type RegisterPersonalDetailsRequest struct {
-	Nationality         string `json:"nationality" binding:"required"`
-	DateOfBirth         string `json:"date_of_birth" binding:"omitempty"`
-	PhoneNumber         string `json:"phone_number" binding:"omitempty"`
-	AccountType         string `json:"account_type" binding:"omitempty"`
-	PersonalAccountType string `json:"personal_account_type" binding:"omitempty"`
-}
-
-func (r *RegisterPersonalDetailsRequest) Validate() error {
-	// Validate nationality
-	if r.Nationality == "" {
-		return errors.New("nationality is required")
-	}
-
-	// Validate date of birth
-	if r.DateOfBirth != "" {
-		_, err := time.Parse("2006-01-02", r.DateOfBirth)
-		if err != nil {
-			return errors.New("invalid date of birth format")
-		}
-	}
-
-	// Validate phone number
-	if r.PhoneNumber != "" {
-		if !isValidPhoneNumber(r.PhoneNumber) {
-			return errors.New("invalid phone number format")
-		}
-	}
-
-	return nil
-}
-
-func isValidPhoneNumber(phone string) bool {
-	phoneRegex := regexp.MustCompile(`^\+?[0-9]{10,15}$`)
-	return phoneRegex.MatchString(phone)
-}
-
-type RegisterBusinessDetailsRequest struct {
-	CompanyName        string `json:"company_name" binding:"omitempty"`
-	CompanyType        string `json:"company_type" binding:"omitempty"`
-	CompanySize        string `json:"company_size" binding:"omitempty"`
-	CompanyWebsite     string `json:"company_website" binding:"omitempty"`
-	CompanyIndustry    string `json:"company_industry" binding:"omitempty"`
-	CompanyDescription string `json:"company_description" binding:"omitempty"`
-	CompanyAddress     string `json:"company_address" binding:"omitempty"`
-	CompanyCity        string `json:"company_city" binding:"omitempty"`
-	CompanyPostalCode  string `json:"company_postal_code" binding:"omitempty"`
-	CompanyCountry     string `json:"company_country" binding:"omitempty"`
-	CompanyPhone       string `json:"company_phone" binding:"omitempty"`
-	CompanyEmail       string `json:"company_email" binding:"omitempty"`
-}
-
-// Fixed RegisterAddressDetailsRequest struct with added State field
-type RegisterAddressDetailsRequest struct {
-	AddressLine1 string `json:"address_line_1" binding:"omitempty"`
-	City         string `json:"city" binding:"omitempty"`
-	State        string `json:"state" binding:"omitempty"`
-	PostalCode   string `json:"postal_code" binding:"omitempty"`
-	Country      string `json:"country" binding:"omitempty"`
-}
-
-// Validate validates the address details request
-func (r *RegisterAddressDetailsRequest) Validate() error {
-	// Validate address line 1
-	if r.AddressLine1 == "" {
-		return errors.New("address line 1 is required")
-	}
-
-	// Validate city
-	if r.City == "" {
-		return errors.New("city is required")
-	}
-
-	// Validate state
-	if r.State == "" {
-		return errors.New("state is required")
-	}
-
-	// Validate postal code
-	if r.PostalCode == "" {
-		return errors.New("postal code is required")
-	}
-
-	// Validate country
-	if r.Country == "" {
-		return errors.New("country is required")
-	}
 	return nil
 }
 
@@ -239,32 +247,6 @@ func (r *UpdateProfileRequest) Validate() error {
 	// Validate nationality is not empty
 	if strings.TrimSpace(r.Nationality) == "" {
 		return errors.New("nationality cannot be empty")
-	}
-
-	return nil
-}
-
-// ChangePasswordRequest represents the change password request
-type ChangePasswordRequest struct {
-	OldPassword string `json:"old_password" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required"`
-}
-
-// Validate validates the change password request
-func (r *ChangePasswordRequest) Validate() error {
-	// Validate old password is not empty
-	if strings.TrimSpace(r.OldPassword) == "" {
-		return errors.New("old password cannot be empty")
-	}
-
-	// Validate new password
-	if err := validatePassword(r.NewPassword); err != nil {
-		return err
-	}
-
-	// Ensure old and new passwords are different
-	if r.OldPassword == r.NewPassword {
-		return errors.New("new password must be different from old password")
 	}
 
 	return nil

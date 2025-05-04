@@ -56,14 +56,14 @@ func (h *UserHandler) GetProfile(ctx *gin.Context) {
 	user, err := h.userService.GetUserByID(ctx, userUUID)
 	if err != nil {
 		errResponse := response.ErrorResponse{
-			Message: app_errors.ErrInternalServer.Error(),
+			Message: appErrors.ErrInternalServer.Error(),
 		}
 
-		if app_errors.IsAppError(err) {
-			appErr := err.(*app_errors.AppError)
+		if appErrors.IsAppError(err) {
+			appErr := err.(*appErrors.AppError)
 			errResponse.Message = appErr.Error()
 
-			if appErr.ErrorType == app_errors.ErrorTypeNotFound {
+			if appErr.ErrorType == appErrors.ErrorTypeNotFound {
 				ctx.JSON(http.StatusNotFound, errResponse)
 				return
 			}
@@ -125,7 +125,7 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	var req request.UpdateProfileRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: app_errors.ErrInvalidRequest.Error(),
+			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,
 		})
 		return
@@ -134,7 +134,7 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	// Validate request data
 	if err := req.Validate(); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: app_errors.ErrInvalidRequest.Error(),
+			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,
 		})
 		return
@@ -169,11 +169,11 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 	user, err := h.userService.UpdateUser(ctx, updatedUser)
 	if err != nil {
 		errResponse := response.ErrorResponse{
-			Message: app_errors.ErrInternalServer.Error(),
+			Message: appErrors.ErrInternalServer.Error(),
 		}
 
-		if app_errors.IsAppError(err) {
-			appErr := err.(*app_errors.AppError)
+		if appErrors.IsAppError(err) {
+			appErr := err.(*appErrors.AppError)
 			errResponse.Message = appErr.Error()
 			ctx.JSON(http.StatusBadRequest, errResponse)
 			return
@@ -230,10 +230,10 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 		return
 	}
 
-	var req request.ChangePasswordRequest
+	var req request.UpdateUserPasswordRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: app_errors.ErrInvalidRequest.Error(),
+			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,
 		})
 		return
@@ -242,7 +242,7 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 	// Validate request data
 	if err := req.Validate(); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: app_errors.ErrInvalidRequest.Error(),
+			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,
 		})
 		return
@@ -252,14 +252,14 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 	err := h.userService.UpdatePassword(ctx, userUUID, req.OldPassword, req.NewPassword)
 	if err != nil {
 		errResponse := response.ErrorResponse{
-			Message: app_errors.ErrInternalServer.Error(),
+			Message: appErrors.ErrInternalServer.Error(),
 		}
 
-		if app_errors.IsAppError(err) {
-			appErr := err.(*app_errors.AppError)
+		if appErrors.IsAppError(err) {
+			appErr := err.(*appErrors.AppError)
 			errResponse.Message = appErr.Error()
 
-			if appErr.ErrorType == app_errors.ErrorTypeUnauthorized {
+			if appErr.ErrorType == appErrors.ErrorTypeUnauthorized {
 				ctx.JSON(http.StatusUnauthorized, errResponse)
 				return
 			}

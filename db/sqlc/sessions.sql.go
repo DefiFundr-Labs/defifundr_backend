@@ -84,14 +84,15 @@ INSERT INTO sessions (
   oauth_access_token,
   oauth_id_token,
   user_login_type,
+  last_used_at,
   mfa_enabled,
   client_ip,
   is_blocked,
   expires_at,
   created_at
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, now())
-) RETURNING id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, now())
+) RETURNING id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
 `
 
 type CreateSessionParams struct {
@@ -103,11 +104,12 @@ type CreateSessionParams struct {
 	OauthAccessToken pgtype.Text      `json:"oauth_access_token"`
 	OauthIDToken     pgtype.Text      `json:"oauth_id_token"`
 	UserLoginType    string           `json:"user_login_type"`
+	LastUsedAt       pgtype.Timestamp `json:"last_used_at"`
 	MfaEnabled       bool             `json:"mfa_enabled"`
 	ClientIp         string           `json:"client_ip"`
 	IsBlocked        bool             `json:"is_blocked"`
 	ExpiresAt        pgtype.Timestamp `json:"expires_at"`
-	Column13         interface{}      `json:"column_13"`
+	Column14         interface{}      `json:"column_14"`
 }
 
 // Creates a new session and returns the created session record
@@ -121,11 +123,12 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.OauthAccessToken,
 		arg.OauthIDToken,
 		arg.UserLoginType,
+		arg.LastUsedAt,
 		arg.MfaEnabled,
 		arg.ClientIp,
 		arg.IsBlocked,
 		arg.ExpiresAt,
-		arg.Column13,
+		arg.Column14,
 	)
 	var i Sessions
 	err := row.Scan(
@@ -133,6 +136,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.UserID,
 		&i.RefreshToken,
 		&i.UserAgent,
+		&i.LastUsedAt,
 		&i.WebOauthClientID,
 		&i.OauthAccessToken,
 		&i.OauthIDToken,
@@ -180,7 +184,7 @@ func (q *Queries) DeleteSessionsByUserID(ctx context.Context, userID uuid.UUID) 
 }
 
 const getActiveSessions = `-- name: GetActiveSessions :many
-SELECT id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
+SELECT id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
 WHERE is_blocked = false AND expires_at > now()
 ORDER BY created_at DESC
 LIMIT $1
@@ -207,6 +211,7 @@ func (q *Queries) GetActiveSessions(ctx context.Context, arg GetActiveSessionsPa
 			&i.UserID,
 			&i.RefreshToken,
 			&i.UserAgent,
+			&i.LastUsedAt,
 			&i.WebOauthClientID,
 			&i.OauthAccessToken,
 			&i.OauthIDToken,
@@ -228,7 +233,7 @@ func (q *Queries) GetActiveSessions(ctx context.Context, arg GetActiveSessionsPa
 }
 
 const getActiveSessionsByUserID = `-- name: GetActiveSessionsByUserID :many
-SELECT id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
+SELECT id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
 WHERE user_id = $1 AND is_blocked = false AND expires_at > now()
 ORDER BY created_at DESC
 `
@@ -248,6 +253,7 @@ func (q *Queries) GetActiveSessionsByUserID(ctx context.Context, userID uuid.UUI
 			&i.UserID,
 			&i.RefreshToken,
 			&i.UserAgent,
+			&i.LastUsedAt,
 			&i.WebOauthClientID,
 			&i.OauthAccessToken,
 			&i.OauthIDToken,
@@ -269,7 +275,7 @@ func (q *Queries) GetActiveSessionsByUserID(ctx context.Context, userID uuid.UUI
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
+SELECT id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
 WHERE id = $1
 LIMIT 1
 `
@@ -283,6 +289,7 @@ func (q *Queries) GetSessionByID(ctx context.Context, id uuid.UUID) (Sessions, e
 		&i.UserID,
 		&i.RefreshToken,
 		&i.UserAgent,
+		&i.LastUsedAt,
 		&i.WebOauthClientID,
 		&i.OauthAccessToken,
 		&i.OauthIDToken,
@@ -297,7 +304,7 @@ func (q *Queries) GetSessionByID(ctx context.Context, id uuid.UUID) (Sessions, e
 }
 
 const getSessionByRefreshToken = `-- name: GetSessionByRefreshToken :one
-SELECT id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
+SELECT id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
 WHERE refresh_token = $1
 LIMIT 1
 `
@@ -311,6 +318,7 @@ func (q *Queries) GetSessionByRefreshToken(ctx context.Context, refreshToken str
 		&i.UserID,
 		&i.RefreshToken,
 		&i.UserAgent,
+		&i.LastUsedAt,
 		&i.WebOauthClientID,
 		&i.OauthAccessToken,
 		&i.OauthIDToken,
@@ -325,7 +333,7 @@ func (q *Queries) GetSessionByRefreshToken(ctx context.Context, refreshToken str
 }
 
 const getSessionsByUserID = `-- name: GetSessionsByUserID :many
-SELECT id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
+SELECT id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at FROM sessions
 WHERE user_id = $1
 ORDER BY created_at DESC
 `
@@ -345,6 +353,7 @@ func (q *Queries) GetSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]
 			&i.UserID,
 			&i.RefreshToken,
 			&i.UserAgent,
+			&i.LastUsedAt,
 			&i.WebOauthClientID,
 			&i.OauthAccessToken,
 			&i.OauthIDToken,
@@ -369,7 +378,7 @@ const updateRefreshToken = `-- name: UpdateRefreshToken :one
 UPDATE sessions
 SET refresh_token = $2
 WHERE id = $1
-RETURNING id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
+RETURNING id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
 `
 
 type UpdateRefreshTokenParams struct {
@@ -386,6 +395,7 @@ func (q *Queries) UpdateRefreshToken(ctx context.Context, arg UpdateRefreshToken
 		&i.UserID,
 		&i.RefreshToken,
 		&i.UserAgent,
+		&i.LastUsedAt,
 		&i.WebOauthClientID,
 		&i.OauthAccessToken,
 		&i.OauthIDToken,
@@ -409,9 +419,10 @@ SET
   mfa_enabled = COALESCE($6, mfa_enabled),
   client_ip = COALESCE($7, client_ip),
   is_blocked = COALESCE($8, is_blocked),
-  expires_at = COALESCE($9, expires_at)
+  expires_at = COALESCE($9, expires_at),
+  last_used_at = COALESCE($10, last_used_at)
 WHERE id = $1
-RETURNING id, user_id, refresh_token, user_agent, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
+RETURNING id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
 `
 
 type UpdateSessionParams struct {
@@ -424,6 +435,7 @@ type UpdateSessionParams struct {
 	ClientIp         string           `json:"client_ip"`
 	IsBlocked        bool             `json:"is_blocked"`
 	ExpiresAt        pgtype.Timestamp `json:"expires_at"`
+	LastUsedAt       pgtype.Timestamp `json:"last_used_at"`
 }
 
 // Updates session details
@@ -438,6 +450,7 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (S
 		arg.ClientIp,
 		arg.IsBlocked,
 		arg.ExpiresAt,
+		arg.LastUsedAt,
 	)
 	var i Sessions
 	err := row.Scan(
@@ -445,6 +458,44 @@ func (q *Queries) UpdateSession(ctx context.Context, arg UpdateSessionParams) (S
 		&i.UserID,
 		&i.RefreshToken,
 		&i.UserAgent,
+		&i.LastUsedAt,
+		&i.WebOauthClientID,
+		&i.OauthAccessToken,
+		&i.OauthIDToken,
+		&i.UserLoginType,
+		&i.MfaEnabled,
+		&i.ClientIp,
+		&i.IsBlocked,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateSessionRefreshToken = `-- name: UpdateSessionRefreshToken :one
+UPDATE sessions
+SET 
+  refresh_token = $2,
+  last_used_at = $3
+WHERE id = $1
+RETURNING id, user_id, refresh_token, user_agent, last_used_at, web_oauth_client_id, oauth_access_token, oauth_id_token, user_login_type, mfa_enabled, client_ip, is_blocked, expires_at, created_at
+`
+
+type UpdateSessionRefreshTokenParams struct {
+	ID           uuid.UUID        `json:"id"`
+	RefreshToken string           `json:"refresh_token"`
+	LastUsedAt   pgtype.Timestamp `json:"last_used_at"`
+}
+
+func (q *Queries) UpdateSessionRefreshToken(ctx context.Context, arg UpdateSessionRefreshTokenParams) (Sessions, error) {
+	row := q.db.QueryRow(ctx, updateSessionRefreshToken, arg.ID, arg.RefreshToken, arg.LastUsedAt)
+	var i Sessions
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.RefreshToken,
+		&i.UserAgent,
+		&i.LastUsedAt,
 		&i.WebOauthClientID,
 		&i.OauthAccessToken,
 		&i.OauthIDToken,

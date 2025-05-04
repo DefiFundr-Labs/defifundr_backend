@@ -9,13 +9,14 @@ INSERT INTO sessions (
   oauth_access_token,
   oauth_id_token,
   user_login_type,
+  last_used_at,
   mfa_enabled,
   client_ip,
   is_blocked,
   expires_at,
   created_at
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, now())
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, COALESCE($14, now())
 ) RETURNING *;
 
 -- name: GetSessionByID :one
@@ -61,7 +62,8 @@ SET
   mfa_enabled = COALESCE($6, mfa_enabled),
   client_ip = COALESCE($7, client_ip),
   is_blocked = COALESCE($8, is_blocked),
-  expires_at = COALESCE($9, expires_at)
+  expires_at = COALESCE($9, expires_at),
+  last_used_at = COALESCE($10, last_used_at)
 WHERE id = $1
 RETURNING *;
 
@@ -114,3 +116,11 @@ WHERE is_blocked = false AND expires_at > now();
 -- Counts the number of active sessions for a specific user
 SELECT COUNT(*) FROM sessions
 WHERE user_id = $1 AND is_blocked = false AND expires_at > now();
+
+-- name: UpdateSessionRefreshToken :one
+UPDATE sessions
+SET 
+  refresh_token = $2,
+  last_used_at = $3
+WHERE id = $1
+RETURNING *;

@@ -2,20 +2,14 @@ basePath: /api/v1
 definitions:
   request.ChangePasswordRequest:
     properties:
+      current_password:
+        type: string
       new_password:
-        type: string
-      old_password:
+        minLength: 8
         type: string
     required:
+    - current_password
     - new_password
-    - old_password
-    type: object
-  request.CheckEmailRequest:
-    properties:
-      email:
-        type: string
-    required:
-    - email
     type: object
   request.LoginRequest:
     properties:
@@ -33,18 +27,33 @@ definitions:
     required:
     - web_auth_token
     type: object
+  request.LogoutRequest:
+    properties:
+      session_id:
+        type: string
+    type: object
+  request.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
   request.RegisterAddressDetailsRequest:
     properties:
-      address_line_1:
-        type: string
       city:
         type: string
       country:
         type: string
       postal_code:
         type: string
-      state:
+      user_address:
         type: string
+    required:
+    - city
+    - country
+    - postal_code
+    - user_address
     type: object
   request.RegisterBusinessDetailsRequest:
     properties:
@@ -54,39 +63,19 @@ definitions:
         type: string
       company_country:
         type: string
-      company_description:
-        type: string
-      company_email:
-        type: string
-      company_industry:
-        type: string
       company_name:
-        type: string
-      company_phone:
         type: string
       company_postal_code:
         type: string
-      company_size:
-        type: string
-      company_type:
-        type: string
       company_website:
         type: string
-    type: object
-  request.RegisterPersonalDetailsRequest:
-    properties:
-      account_type:
-        type: string
-      date_of_birth:
-        type: string
-      nationality:
-        type: string
-      personal_account_type:
-        type: string
-      phone_number:
+      employment_type:
         type: string
     required:
-    - nationality
+    - company_address
+    - company_city
+    - company_country
+    - company_name
     type: object
   request.RegisterUserRequest:
     properties:
@@ -107,6 +96,13 @@ definitions:
         type: string
     required:
     - web_auth_token
+    type: object
+  request.RevokeDeviceRequest:
+    properties:
+      session_id:
+        type: string
+    required:
+    - session_id
     type: object
   request.UpdateProfileRequest:
     properties:
@@ -131,6 +127,13 @@ definitions:
     - last_name
     - nationality
     type: object
+  request.VerifyMFARequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
   request.WaitlistJoinRequest:
     properties:
       email:
@@ -144,8 +147,16 @@ definitions:
     required:
     - email
     type: object
+  request.Web3AuthLoginRequest:
+    properties:
+      web_auth_token:
+        type: string
+    required:
+    - web_auth_token
+    type: object
   response.ErrorResponse:
     properties:
+      data: {}
       message:
         type: string
       success:
@@ -162,6 +173,19 @@ definitions:
         type: integer
       total_pages:
         type: integer
+    type: object
+  response.ProfileCompletionResponse:
+    properties:
+      completion_percentage:
+        type: integer
+      missing_fields:
+        items:
+          type: string
+        type: array
+      required_actions:
+        items:
+          type: string
+        type: array
     type: object
   response.SuccessResponse:
     properties:
@@ -332,9 +356,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Logs in a user with the provided credentials
+      description: Login with email and password credentials
       parameters:
-      - description: Login request
+      - description: User login credentials
         in: body
         name: loginRequest
         required: true
@@ -344,60 +368,97 @@ paths:
       - application/json
       responses:
         "200":
-          description: Successfully logged in
+          description: Login successful
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
           description: Invalid request
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: User not found
+        "401":
+          description: Invalid email or password
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: Login a user
+      summary: Login with email/password
       tags:
       - authentication
-  /auth/register:
+  /auth/logout:
     post:
       consumes:
       - application/json
-      description: Create a new user account
+      description: Logout the authenticated user by revoking their session
       parameters:
-      - description: User registration data
+      - description: Session ID (optional, defaults to current session)
         in: body
-        name: register
-        required: true
+        name: logoutRequest
         schema:
-          $ref: '#/definitions/request.RegisterUserRequest'
+          $ref: '#/definitions/request.LogoutRequest'
       produces:
       - application/json
       responses:
-        "201":
-          description: Successfully registered
+        "200":
+          description: Logged out successfully
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
           description: Invalid request
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: User already exists
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-        "429":
-          description: Too many requests
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: Register a new user
+      security:
+      - Bearer: []
+      summary: Logout
       tags:
       - authentication
-  /auth/register/business/business-details:
-    post:
+  /auth/profile/address:
+    put:
+      consumes:
+      - application/json
+      description: Update address details for a registered user
+      parameters:
+      - description: Address details
+        in: body
+        name: addressDetails
+        required: true
+        schema:
+          $ref: '#/definitions/request.RegisterAddressDetailsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Address details updated successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Update address details
+      tags:
+      - profile
+  /auth/profile/business:
+    put:
       consumes:
       - application/json
       description: Update business details for a registered user
@@ -412,7 +473,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Successfully updated business details
+          description: Business details updated successfully
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
@@ -431,24 +492,187 @@ paths:
       - Bearer: []
       summary: Update business details
       tags:
-      - authentication
-  /auth/register/user/address-details:
-    post:
-      consumes:
-      - application/json
-      description: Update address details for a registered user
-      parameters:
-      - description: User address details
-        in: body
-        name: addressDetails
-        required: true
-        schema:
-          $ref: '#/definitions/request.RegisterAddressDetailsRequest'
+      - profile
+  /auth/profile/completion:
+    get:
+      description: Retrieve the profile completion status for the authenticated user
       produces:
       - application/json
       responses:
         "200":
-          description: Successfully updated address details
+          description: Profile completion status retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/response.ProfileCompletionResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get profile completion status
+      tags:
+      - profile
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh an expired access token using a refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: refreshRequest
+        required: true
+        schema:
+          $ref: '#/definitions/request.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user with email and password
+      parameters:
+      - description: User registration details
+        in: body
+        name: registerRequest
+        required: true
+        schema:
+          $ref: '#/definitions/request.RegisterUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Email already registered
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - authentication
+  /auth/security/devices:
+    get:
+      description: Retrieve all active devices/sessions for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Active devices retrieved
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get active devices
+      tags:
+      - security
+  /auth/security/devices/revoke:
+    post:
+      consumes:
+      - application/json
+      description: Revoke a specific device/session for the authenticated user
+      parameters:
+      - description: Session ID to revoke
+        in: body
+        name: revokeRequest
+        required: true
+        schema:
+          $ref: '#/definitions/request.RevokeDeviceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Device revoked successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Session does not belong to user
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Revoke device
+      tags:
+      - security
+  /auth/security/events:
+    get:
+      description: Retrieve security events for the authenticated user's account
+      parameters:
+      - description: Filter by event type
+        in: query
+        name: type
+        type: string
+      - description: Filter by start time (RFC3339 format)
+        in: query
+        name: start_time
+        type: string
+      - description: Filter by end time (RFC3339 format)
+        in: query
+        name: end_time
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Security events retrieved
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
@@ -465,60 +689,53 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - Bearer: []
-      summary: Update user address details
+      summary: Get security events
       tags:
-      - authentication
-  /auth/register/user/check-email:
+      - security
+  /auth/security/mfa/setup:
     post:
-      consumes:
-      - application/json
-      description: Check if an email address is already registered
-      parameters:
-      - description: Email to check
-        in: body
-        name: email
-        required: true
-        schema:
-          $ref: '#/definitions/request.CheckEmailRequest'
+      description: Initialize multi-factor authentication for the authenticated user
       produces:
       - application/json
       responses:
         "200":
-          description: Email check result
+          description: MFA setup initiated
           schema:
             $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: Check if email exists
+      security:
+      - Bearer: []
+      summary: Setup MFA
       tags:
-      - authentication
-  /auth/register/user/personal-details:
+      - security
+  /auth/security/mfa/verify:
     post:
       consumes:
       - application/json
-      description: Update personal details for a registered user
+      description: Verify an MFA code for the authenticated user
       parameters:
-      - description: User personal details
+      - description: MFA code
         in: body
-        name: personalDetails
+        name: mfaCode
         required: true
         schema:
-          $ref: '#/definitions/request.RegisterPersonalDetailsRequest'
+          $ref: '#/definitions/request.VerifyMFARequest'
       produces:
       - application/json
       responses:
         "200":
-          description: Successfully updated personal details
+          description: MFA code verified successfully
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
-          description: Invalid request
+          description: Invalid MFA code
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "401":
@@ -531,7 +748,64 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - Bearer: []
-      summary: Update user personal details
+      summary: Verify MFA
+      tags:
+      - security
+  /auth/wallet:
+    get:
+      description: Retrieve all blockchain wallets linked to the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Wallets retrieved successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get user wallets
+      tags:
+      - wallet
+  /auth/web3auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate or create a new user with Web3Auth tokens
+      parameters:
+      - description: Web3Auth token
+        in: body
+        name: loginRequest
+        required: true
+        schema:
+          $ref: '#/definitions/request.Web3AuthLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authentication successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Authentication failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Login or register with Web3Auth
       tags:
       - authentication
   /users/change-password:

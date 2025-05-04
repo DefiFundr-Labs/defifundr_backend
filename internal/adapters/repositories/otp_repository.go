@@ -90,7 +90,7 @@ func (r *OTPRepository) VerifyOTP(ctx context.Context, id uuid.UUID, code string
 
 	// Check if the OTP has been used
 	if otpData.MaxAttempts <= otpData.AttemptsMade {
-		return errors.New("Max attempts reached")
+		return errors.New("max attempts reached")
 	}
 
 	// Mark the OTP as verified

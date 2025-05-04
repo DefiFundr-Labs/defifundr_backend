@@ -1,3 +1,4 @@
+// services/auth_service.go (improved)
 package services
 
 import (
@@ -14,35 +15,95 @@ import (
 	"github.com/demola234/defifundr/internal/core/ports"
 	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 )
 
 type authService struct {
-	userRepo    ports.UserRepository
-	sessionRepo ports.SessionRepository
-	oauthRepo   ports.OAuthRepository
-	tokenMaker  tokenMaker.Maker
-	config      config.Config
-	logger      logging.Logger
+	userRepo     ports.UserRepository
+	sessionRepo  ports.SessionRepository
+	oauthRepo    ports.OAuthRepository
+	walletRepo   ports.WalletRepository
+	securityRepo ports.SecurityRepository
+	emailService ports.EmailService
+	tokenMaker   tokenMaker.Maker
+	config       config.Config
+	logger       logging.Logger
 }
 
-// NewAuthService creates a new instance of authService.
+// SetupMFA sets up multi-factor authentication for a user
+func (a *authService) SetupMFA(ctx context.Context, userID uuid.UUID) (string, error) {
+	// Check if user exists
+	user, err := a.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Generate a new TOTP secret
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "DefiFundr",
+		AccountName: user.Email,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate TOTP key: %w", err)
+	}
+
+	// Store the secret in the database
+	err = a.userRepo.SetMFASecret(ctx, userID, key.Secret())
+	if err != nil {
+		return "", fmt.Errorf("failed to store MFA secret: %w", err)
+	}
+
+	// Log the MFA setup
+	a.LogSecurityEvent(ctx, "mfa_setup_initiated", userID, map[string]interface{}{
+		"time": time.Now().Format(time.RFC3339),
+	})
+
+	// Return the TOTP URI for QR code generation
+	return key.URL(), nil
+}
+
+// VerifyMFA verifies a TOTP code
+func (a *authService) VerifyMFA(ctx context.Context, userID uuid.UUID, code string) (bool, error) {
+	// Get the MFA secret for the user
+	secret, err := a.userRepo.GetMFASecret(ctx, userID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get MFA secret: %w", err)
+	}
+
+	// Validate the TOTP code
+	valid := totp.Validate(code, secret)
+
+	// Log the verification attempt
+	a.LogSecurityEvent(ctx, "mfa_verification", userID, map[string]interface{}{
+		"success": valid,
+		"time":    time.Now().Format(time.RFC3339),
+	})
+
+	return valid, nil
+}
+
+// NewAuthService creates a new instance of authService
 func NewAuthService(
 	userRepo ports.UserRepository,
 	sessionRepo ports.SessionRepository,
 	oauthRepo ports.OAuthRepository,
+	walletRepo ports.WalletRepository,
+	securityRepo ports.SecurityRepository,
+	emailService ports.EmailService,
 	tokenMaker tokenMaker.Maker,
 	config config.Config,
 	logger logging.Logger,
 ) ports.AuthService {
-	// Create rate limiter for API operations
-
 	return &authService{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
-		oauthRepo:   oauthRepo,
-		tokenMaker:  tokenMaker,
-		config:      config,
-		logger:      logger,
+		userRepo:     userRepo,
+		sessionRepo:  sessionRepo,
+		oauthRepo:    oauthRepo,
+		walletRepo:   walletRepo,
+		securityRepo: securityRepo,
+		emailService: emailService,
+		tokenMaker:   tokenMaker,
+		config:       config,
+		logger:       logger,
 	}
 }
 
@@ -127,104 +188,8 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 		return nil, errors.New("email not registered")
 	}
 
-	// // Check if user has already finish onboarding for business companyName, companyAddress, companyCity, companyPostalCode, companyCountry
-	// if existingUser.AccountType == "business" {
-	// 	if existingUser.CompanyName == "" || existingUser.CompanyAddress == "" || existingUser.CompanyCity == "" || existingUser.CompanyPostalCode == "" || existingUser.CompanyCountry == "" {
-	// 		a.logger.Error("User has not finished onboarding", nil, map[string]interface{}{
-	// 			"email": user.Email,
-	// 		})
-	// 		return nil, errors.New("user has not finished onboarding")
-	// 	}
-	// }
-
-	// // Check if user has already finish onboarding for personal account
-	// if existingUser.AccountType == "personal" {
-	// 	if existingUser.FirstName == "" || existingUser.LastName == "" || existingUser.Address == "" || existingUser.City == "" || existingUser.PostalCode == "" || existingUser.Nationality == "" {
-	// 		a.logger.Error("User has not finished onboarding", nil, map[string]interface{}{
-	// 			"email": user.Email,
-	// 		})
-	// 		return nil, errors.New("user has not finished onboarding")
-	// 	}
-	// }
-
 	// Return the user
 	return existingUser, nil
-}
-
-// Logout implements ports.AuthService.
-func (a *authService) Logout(ctx context.Context, sessionID uuid.UUID) error {
-	return a.sessionRepo.DeleteSession(ctx, sessionID)
-}
-
-// RefreshToken implements ports.AuthService.
-func (a *authService) RefreshToken(ctx context.Context, refreshToken string, userAgent string, clientIP string) (*domain.Session, string, error) {
-	// // Get session by refresh token
-	// session, err := a.sessionRepo.GetSessionByRefreshToken(ctx, refreshToken)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get session by refresh token: %w", err)
-	// }
-
-	// // Check if session exists
-	// if session == nil {
-	// 	return nil, errors.New("invalid refresh token")
-	// }
-
-	// // Check if session is blocked
-	// if session.IsBlocked {
-	// 	return nil, errors.New("session is blocked")
-	// }
-
-	// // Check if session has expired
-	// if time.Now().After(session.ExpiresAt) {
-	// 	return nil, errors.New("refresh token has expired")
-	// }
-
-	// // Get the user
-	// user, err := a.userRepo.GetUserByID(ctx, session.UserID)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get user: %w", err)
-	// }
-
-	// // Generate a new access token
-	// accessToken, _, err := a.tokenMaker.CreateToken(
-	// 	user.Email,
-	// 	user.ID.String(),
-	// 	a.config.AccessTokenDuration,
-	// )
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to create access token: %w", err)
-	// }
-
-	// // Optional: Refresh the session with a new refresh token
-	// // For security reasons, many implementations rotate refresh tokens
-	// if a.config.RotateRefreshTokens {
-	// 	// Delete the old session
-	// 	err = a.sessionRepo.DeleteSession(ctx, session.ID)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("failed to delete old session: %w", err)
-	// 	}
-
-	// 	// Create a new session
-
-	// 	newSessionID := domain.Session{
-	// 		ID:           uuid.New(),
-	// 		UserID:       user.ID,
-	// 		RefreshToken: random.RandomString(32),
-	// 		UserAgent:    userAgent,
-	// 		ClientIP:     clientIP,
-	// 		IsBlocked:    false,
-	// 		ExpiresAt:    time.Now().Add(a.config.RefreshTokenDuration),
-	// 		CreatedAt:    time.Now(),
-	// 	}
-
-	// 	session, err = a.sessionRepo.CreateSession(ctx, newSessionID)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("failed to create new session: %w", err)
-	// 	}
-	// }
-
-	// return session, accessToken, nil
-	panic("unimplemented")
 }
 
 // RegisterUser implements the user registration process with Web3Auth integration
@@ -566,8 +531,365 @@ func (a *authService) CheckEmailExists(ctx context.Context, email string) (bool,
 	return exists, nil
 }
 
+// AuthenticateWithWeb3 implements unified Web3Auth authentication flow
+func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken string, userAgent string, clientIP string) (*domain.User, *domain.Session, error) {
+	// Validate the Web3Auth token
+	claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
+	if err != nil {
+		a.logger.Error("Web3Auth token validation failed", err, nil)
+		return nil, nil, err
+	}
+
+	// Extract identity information
+	email := claims.Email
+	if email == "" {
+		return nil, nil, errors.New("email not provided in Web3Auth token")
+	}
+
+	// Check if user exists
+	existingUser, err := a.userRepo.GetUserByEmail(ctx, email)
+	var user *domain.User
+	isNewUser := false
+
+	if err != nil || existingUser == nil {
+		// This is a new user - create account
+		a.logger.Info("Creating new user from Web3Auth", map[string]interface{}{
+			"email":    email,
+			"verifier": claims.Verifier,
+		})
+
+		// Extract profile data from claims
+		firstName, lastName := extractNameFromClaims(claims)
+		profileImage := claims.ProfileImage
+
+		// Determine provider from verifier
+		authProvider := mapVerifierToProvider(claims.Verifier)
+
+		// Create new user
+		newUser := domain.User{
+			ID:                  uuid.New(),
+			Email:               email,
+			FirstName:           firstName,
+			LastName:            lastName,
+			ProfilePicture:      &profileImage,
+			ProviderID:          claims.VerifierID,
+			AuthProvider:        string(authProvider),
+			AccountType:         "personal", // Default value, can be updated later
+			PersonalAccountType: "user",     // Default value, can be updated later
+			Nationality:         "unknown",  // Default value, can be updated later
+		}
+
+		user, err = a.userRepo.CreateUser(ctx, newUser)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create user: %w", err)
+		}
+
+		isNewUser = true
+
+		// Track registration event
+		a.LogSecurityEvent(ctx, "user_registered", user.ID, map[string]interface{}{
+			"provider": user.AuthProvider,
+			"email":    user.Email,
+		})
+	} else {
+		// Existing user - return user data
+		user = existingUser
+
+		// Update any profile info that may have changed
+		updateNeeded := false
+
+		// Update profile picture if new one available
+		if claims.ProfileImage != "" && (user.ProfilePicture == nil || *user.ProfilePicture != claims.ProfileImage) {
+			profileImage := claims.ProfileImage
+			user.ProfilePicture = &profileImage
+			updateNeeded = true
+		}
+
+		// Update name if it was empty before
+		if user.FirstName == "" && user.LastName == "" {
+			firstName, lastName := extractNameFromClaims(claims)
+			user.FirstName = firstName
+			user.LastName = lastName
+			updateNeeded = true
+		}
+
+		if updateNeeded {
+			a.userRepo.UpdateUser(ctx, *user)
+		}
+	}
+
+	// Process wallets from Web3Auth claims if available
+	if len(claims.Wallets) > 0 {
+		for _, wallet := range claims.Wallets {
+			err := a.processWallet(ctx, user.ID, wallet)
+			if err != nil {
+				// Log but continue - wallet linking is non-critical
+				a.logger.Warn("Failed to process wallet", map[string]interface{}{
+					"user_id": user.ID,
+					"wallet":  wallet.PublicKey,
+					"error":   err.Error(),
+				})
+			}
+		}
+	}
+
+	// Create session for the user
+	session, err := a.CreateSession(ctx, user.ID, userAgent, clientIP, webAuthToken, user.Email, "web3auth")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Track login event
+	a.LogSecurityEvent(ctx, "user_login", user.ID, map[string]interface{}{
+		"provider":    user.AuthProvider,
+		"ip":          clientIP,
+		"is_new_user": isNewUser,
+	})
+
+	// Check for suspicious activity in background
+	go a.detectSuspiciousActivity(context.Background(), user.ID, clientIP, userAgent)
+
+	return user, session, nil
+}
+
+// processWallet handles wallet data from Web3Auth
+func (a *authService) processWallet(ctx context.Context, userID uuid.UUID, wallet domain.Wallet) error {
+	// Skip empty wallets
+	if wallet.PublicKey == "" {
+		return nil
+	}
+
+	// Check if wallet already exists
+	existingWallet, err := a.walletRepo.GetWalletByAddress(ctx, wallet.PublicKey)
+	if err != nil {
+		return fmt.Errorf("error checking wallet existence: %w", err)
+	}
+
+	// If wallet exists and belongs to user, nothing to do
+	if existingWallet != nil && existingWallet.UserID == userID {
+		return nil
+	}
+
+	// If wallet exists but belongs to another user, log security event and don't link
+	if existingWallet != nil && existingWallet.UserID != userID {
+		a.LogSecurityEvent(ctx, "wallet_conflict", userID, map[string]interface{}{
+			"wallet_address": wallet.PublicKey,
+			"existing_user":  existingWallet.UserID.String(),
+		})
+		return fmt.Errorf("wallet already linked to another account")
+	}
+
+	// Determine chain from wallet type
+	chain := "ethereum"
+	if wallet.Type != "" && wallet.Type != "hex" {
+		chain = strings.ToLower(wallet.Type)
+	}
+
+	// Create new wallet
+	return a.LinkWallet(ctx, userID, wallet.PublicKey, wallet.Type, chain)
+}
+
+// LinkWallet links a blockchain wallet to a user account (continued)
+func (a *authService) LinkWallet(ctx context.Context, userID uuid.UUID, walletAddress string, walletType string, chain string) error {
+	// ... (previous code)
+
+	// Log security event
+	a.LogSecurityEvent(ctx, "wallet_linked", userID, map[string]interface{}{
+		"wallet_address": walletAddress,
+		"wallet_type":    walletType,
+		"chain":          chain,
+	})
+
+	return nil
+}
+
+// GetUserWallets retrieves all wallets for a user
+func (a *authService) GetUserWallets(ctx context.Context, userID uuid.UUID) ([]domain.UserWallet, error) {
+	return a.walletRepo.GetWalletsByUserID(ctx, userID)
+}
+
+// GetProfileCompletionStatus calculates profile completion percentage
+func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uuid.UUID) (*domain.ProfileCompletion, error) {
+	// Get user data
+	user, err := a.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Define required fields
+	type fieldCheck struct {
+		name     string
+		required bool
+		value    interface{}
+	}
+
+	// Common required fields
+	fields := []fieldCheck{
+		{"First Name", true, user.FirstName != ""},
+		{"Last Name", true, user.LastName != ""},
+		{"Nationality", true, user.Nationality != "" && user.Nationality != "unknown"},
+	}
+
+	// Account type specific fields
+	if user.AccountType == "business" {
+		fields = append(fields, []fieldCheck{
+			{"Company Name", true, user.CompanyName != ""},
+			{"Company Address", true, user.CompanyAddress != ""},
+			{"Company City", true, user.CompanyCity != ""},
+			{"Company Country", true, user.CompanyCountry != ""},
+		}...)
+	} else {
+		fields = append(fields, []fieldCheck{
+			{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
+			{"City", true, user.City != ""},
+			{"Postal Code", true, user.PostalCode != ""},
+		}...)
+	}
+
+	// Calculate completion percentage
+	var completedFields, requiredFields int
+	var missingFields []string
+
+	for _, field := range fields {
+		if field.required {
+			requiredFields++
+
+			// Check if the field has a value
+			isCompleted := false
+			switch v := field.value.(type) {
+			case bool:
+				isCompleted = v
+			default:
+				isCompleted = field.value != nil
+			}
+
+			if isCompleted {
+				completedFields++
+			} else {
+				missingFields = append(missingFields, field.name)
+			}
+		}
+	}
+
+	// Calculate percentage
+	percentage := 0
+	if requiredFields > 0 {
+		percentage = (completedFields * 100) / requiredFields
+	}
+
+	// Determine required actions
+	var requiredActions []string
+
+	if len(missingFields) > 0 {
+		requiredActions = append(requiredActions, "complete_profile")
+	}
+
+	// Create profile completion response
+	completion := &domain.ProfileCompletion{
+		UserID:               userID,
+		CompletionPercentage: percentage,
+		MissingFields:        missingFields,
+		RequiredActions:      requiredActions,
+	}
+
+	return completion, nil
+}
+
+// detectSuspiciousActivity monitors for suspicious login activity
+func (a *authService) detectSuspiciousActivity(ctx context.Context, userID uuid.UUID, clientIP string, userAgent string) {
+	// Get user's previous logins
+	previousLogins, err := a.securityRepo.GetRecentLoginsByUserID(ctx, userID, 5)
+	if err != nil {
+		return // Don't block authentication on error
+	}
+
+	// If this is the first login, nothing to check
+	if len(previousLogins) == 0 {
+		return
+	}
+
+	// Check if this is a login from a new location/device
+	isNewIP := true
+	isNewDevice := true
+
+	for _, login := range previousLogins {
+		if login.IPAddress == clientIP {
+			isNewIP = false
+		}
+
+		if login.UserAgent == userAgent {
+			isNewDevice = false
+		}
+	}
+
+	// If this is a new location or device, send notification
+	if isNewIP || isNewDevice {
+		// Get user for email notification
+		user, err := a.userRepo.GetUserByID(ctx, userID)
+		if err != nil {
+			a.logger.Error("Failed to get user for security notification", err, map[string]interface{}{
+				"user_id": userID,
+			})
+			return
+		}
+
+		// Send security notification
+		deviceInfo := parseUserAgent(userAgent)
+		loginTime := time.Now().Format(time.RFC1123)
+
+		// Send email alert
+		if a.emailService != nil {
+			emailData := map[string]interface{}{
+				"name":       user.FirstName,
+				"ip":         clientIP,
+				"device":     deviceInfo,
+				"time":       loginTime,
+				"login_type": "Web3Auth",
+			}
+
+			fmt.Printf("Email Data: %s\n", emailData)
+
+			// Use a new context to avoid cancellation
+			go func() {
+				bgCtx := context.Background()
+				err := a.emailService.SendBatchUpdate(
+					bgCtx,
+					[]string{user.Email},
+					"New Login Detected",
+					fmt.Sprintf("We noticed a new login to your DefiFundr account from %s at %s. If this was you, you can ignore this message.", deviceInfo, loginTime),
+				)
+				if err != nil {
+					a.logger.Error("Failed to send security notification email", err, nil)
+				}
+			}()
+		}
+
+		// Send Email Alert
+		fmt.Printf("Security alert: New login detected from %s at %s\n", deviceInfo, loginTime)
+		fmt.Printf("Login Time: %s\n", loginTime)
+		fmt.Printf("Send Email Alert: %s\n", user.Email)
+
+		securityTreat := domain.SecurityEvent{
+			UserID:    userID,
+			IPAddress: clientIP,
+			UserAgent: userAgent,
+			ID:        uuid.New(),
+			EventType: "New IP/Device Detected",
+			Metadata: map[string]interface{}{
+				"device":     deviceInfo,
+				"time":       loginTime,
+				"login_type": "Web3Auth",
+			},
+			Timestamp: time.Now(),
+		}
+
+		// Log the suspicious activity
+		a.securityRepo.LogSecurityEvent(ctx, securityTreat)
+	}
+}
+
 // CreateSession creates a new session for the user
-func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userAgent, clientIP string, webOAuthClientID string, email string, login_type string) (*domain.Session, error) {
+func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userAgent, clientIP string, webOAuthClientID string, email string, loginType string) (*domain.Session, error) {
 	a.logger.Info("Creating new session", map[string]interface{}{
 		"user_id": userID,
 		"ip":      clientIP,
@@ -584,32 +906,37 @@ func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userA
 		return nil, fmt.Errorf("failed to create access token: %w", err)
 	}
 
-	// Generate Session ID
+	// Generate a refresh token
+	refreshToken, payload, err := a.tokenMaker.CreateToken(
+		email,
+		userID,
+		a.config.RefreshTokenDuration,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create refresh token: %w", err)
+	}
+
+	// Create session
 	session := domain.Session{
 		ID:               uuid.New(),
 		UserID:           userID,
+		RefreshToken:     refreshToken,
 		OAuthAccessToken: accessToken,
 		UserAgent:        userAgent,
 		ClientIP:         clientIP,
 		IsBlocked:        false,
+		MFAEnabled:       false,
+		UserLoginType:    loginType,
 		ExpiresAt:        time.Now().Add(a.config.AccessTokenDuration),
 		CreatedAt:        time.Now(),
-		UserLoginType:    login_type,
 	}
 
-	a.logger.Info("Session created", map[string]interface{}{
-		"session_id": session.ID,
-		"token":      accessToken,
-	})
-
-	// Set OAuth fields with non-nil values
-	oauthAccessToken := accessToken
-	session.OAuthAccessToken = oauthAccessToken
-
+	// Set Web3Auth token if provided
 	if webOAuthClientID != "" {
 		session.WebOAuthClientID = &webOAuthClientID
 	}
 
+	// Create session in database
 	userSession, err := a.sessionRepo.CreateSession(ctx, session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -621,4 +948,293 @@ func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userA
 	})
 
 	return userSession, nil
+}
+
+// GetActiveDevices returns all active devices for a user
+func (a *authService) GetActiveDevices(ctx context.Context, userID uuid.UUID) ([]domain.DeviceInfo, error) {
+	// Get active sessions
+	activeSessions, err := a.sessionRepo.GetActiveSessionsByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active sessions: %w", err)
+	}
+
+	// Create device info list
+	devices := make([]domain.DeviceInfo, 0, len(activeSessions))
+
+	for _, session := range activeSessions {
+		// Parse user agent
+		deviceInfo := parseUserAgent(session.UserAgent)
+
+		// Create device info
+		device := domain.DeviceInfo{
+			SessionID:       session.ID,
+			Browser:         deviceInfo,
+			OperatingSystem: extractOSFromUserAgent(session.UserAgent),
+			DeviceType:      determineDeviceType(session.UserAgent),
+			IPAddress:       session.ClientIP,
+			LoginType:       session.UserLoginType,
+			LastUsed:        time.Now(), // Update to use lastUsedAt when available
+			CreatedAt:       session.CreatedAt,
+		}
+
+		devices = append(devices, device)
+	}
+
+	return devices, nil
+}
+
+// RevokeSession revokes a specific session
+func (a *authService) RevokeSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	// Get session to verify ownership
+	session, err := a.sessionRepo.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	// Verify session belongs to user
+	if session.UserID != userID {
+		return errors.New("session does not belong to user")
+	}
+
+	// Block session
+	err = a.sessionRepo.BlockSession(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to block session: %w", err)
+	}
+
+	// Log security event
+	a.LogSecurityEvent(ctx, "session_revoked", userID, map[string]interface{}{
+		"session_id": sessionID,
+	})
+
+	return nil
+}
+
+// Logout logs out a user by revoking their session
+func (a *authService) Logout(ctx context.Context, sessionID uuid.UUID) error {
+	return a.sessionRepo.DeleteSession(ctx, sessionID)
+}
+
+// RefreshToken refreshes an access token
+func (a *authService) RefreshToken(ctx context.Context, refreshToken, userAgent, clientIP string) (*domain.Session, string, error) {
+	// Get session by refresh token
+	session, err := a.sessionRepo.GetSessionByRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get session by refresh token: %w", err)
+	}
+
+	// Validate session
+	if session == nil || session.IsBlocked || time.Now().After(session.ExpiresAt) {
+		return nil, "", errors.New("invalid or expired refresh token")
+	}
+
+	// Get the user
+	user, err := a.userRepo.GetUserByID(ctx, session.UserID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Generate a new access token
+	accessToken, _, err := a.tokenMaker.CreateToken(
+		user.Email,
+		user.ID,
+		a.config.AccessTokenDuration,
+	)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create access token: %w", err)
+	}
+
+	// Generate a refresh token
+	newRefreshToken, _, err := a.tokenMaker.CreateToken(
+		user.Email,
+		user.ID,
+		a.config.RefreshTokenDuration,
+	)
+
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create refresh token: %w", err)
+	}
+
+	// Update session with new refresh token
+	updatedSession, err := a.sessionRepo.UpdateRefreshToken(ctx, session.ID, newRefreshToken)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to update refresh token: %w", err)
+	}
+
+	// Log security event
+	a.LogSecurityEvent(ctx, "token_refreshed", user.ID, map[string]interface{}{
+		"session_id": session.ID,
+		"ip":         clientIP,
+	})
+
+	return updatedSession, accessToken, nil
+}
+
+// LogSecurityEvent logs a security event
+func (a *authService) LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]interface{}) error {
+	// Get client IP from context if available
+	clientIP := ""
+	if ipValue := ctx.Value("client_ip"); ipValue != nil {
+		if ip, ok := ipValue.(string); ok {
+			clientIP = ip
+		}
+	}
+
+	// Get user agent from context if available
+	userAgent := ""
+	if uaValue := ctx.Value("user_agent"); uaValue != nil {
+		if ua, ok := uaValue.(string); ok {
+			userAgent = ua
+		}
+	}
+
+	// Create security event
+	event := domain.SecurityEvent{
+		ID:        uuid.New(),
+		UserID:    userID,
+		EventType: eventType,
+		IPAddress: clientIP,
+		UserAgent: userAgent,
+		Metadata:  metadata,
+		Timestamp: time.Now(),
+	}
+
+	// Log event
+	a.logger.Info("Security event", map[string]interface{}{
+		"event_type": eventType,
+		"user_id":    userID.String(),
+		"ip":         clientIP,
+		"metadata":   metadata,
+	})
+
+	// Store event in database
+	return a.securityRepo.LogSecurityEvent(ctx, event)
+}
+
+// Helper functions
+
+// extractNameFromClaims extracts first and last name from Web3Auth claims
+func extractNameFromClaims(claims *domain.Web3AuthClaims) (string, string) {
+	if claims.Name == "" {
+		return "User", ""
+	}
+
+	nameParts := strings.Split(claims.Name, " ")
+	firstName := nameParts[0]
+
+	var lastName string
+	if len(nameParts) > 1 {
+		lastName = strings.Join(nameParts[1:], " ")
+	}
+
+	return firstName, lastName
+}
+
+// mapVerifierToProvider maps Web3Auth verifier to auth provider
+func mapVerifierToProvider(verifier string) domain.AuthProvider {
+	lowerVerifier := strings.ToLower(verifier)
+
+	if strings.Contains(lowerVerifier, "google") {
+		return domain.GoogleProvider
+	} else if strings.Contains(lowerVerifier, "facebook") {
+		return domain.FacebookProvider
+	} else if strings.Contains(lowerVerifier, "apple") {
+		return domain.AppleProvider
+	} else if strings.Contains(lowerVerifier, "twitter") {
+		return domain.TwitterProvider
+	} else if strings.Contains(lowerVerifier, "discord") {
+		return domain.DiscordProvider
+	}
+
+	return domain.Web3AuthProvider
+}
+
+// parseUserAgent extracts browser and device info from user agent
+func parseUserAgent(userAgent string) string {
+	lowerUA := strings.ToLower(userAgent)
+
+	// Extract browser
+	var browser string
+	switch {
+	case strings.Contains(lowerUA, "chrome"):
+		browser = "Chrome"
+	case strings.Contains(lowerUA, "firefox"):
+		browser = "Firefox"
+	case strings.Contains(lowerUA, "safari") && !strings.Contains(lowerUA, "chrome"):
+		browser = "Safari"
+	case strings.Contains(lowerUA, "edge"):
+		browser = "Edge"
+	default:
+		browser = "Unknown Browser"
+	}
+
+	// Extract device type
+	var device string
+	switch {
+	case strings.Contains(lowerUA, "iphone"):
+		device = "iPhone"
+	case strings.Contains(lowerUA, "ipad"):
+		device = "iPad"
+	case strings.Contains(lowerUA, "android"):
+		device = "Android Device"
+	case strings.Contains(lowerUA, "macintosh") || strings.Contains(lowerUA, "mac os"):
+		device = "Mac"
+	case strings.Contains(lowerUA, "windows"):
+		device = "Windows PC"
+	case strings.Contains(lowerUA, "linux"):
+		device = "Linux PC"
+	default:
+		device = "Unknown Device"
+	}
+
+	return fmt.Sprintf("%s on %s", browser, device)
+}
+
+// extractOSFromUserAgent extracts OS from user agent
+func extractOSFromUserAgent(userAgent string) string {
+	lowerUA := strings.ToLower(userAgent)
+
+	switch {
+	case strings.Contains(lowerUA, "windows"):
+		return "Windows"
+	case strings.Contains(lowerUA, "macintosh") || strings.Contains(lowerUA, "mac os"):
+		return "MacOS"
+	case strings.Contains(lowerUA, "linux") && !strings.Contains(lowerUA, "android"):
+		return "Linux"
+	case strings.Contains(lowerUA, "android"):
+		return "Android"
+	case strings.Contains(lowerUA, "iphone") || strings.Contains(lowerUA, "ipad") || strings.Contains(lowerUA, "ios"):
+		return "iOS"
+	default:
+		return "Unknown OS"
+	}
+}
+
+// determineDeviceType determines the device type from user agent
+func determineDeviceType(userAgent string) string {
+	lowerUA := strings.ToLower(userAgent)
+
+	switch {
+	case strings.Contains(lowerUA, "iphone") || strings.Contains(lowerUA, "android") && strings.Contains(lowerUA, "mobile"):
+		return "Mobile"
+	case strings.Contains(lowerUA, "ipad") || strings.Contains(lowerUA, "android") && !strings.Contains(lowerUA, "mobile"):
+		return "Tablet"
+	default:
+		return "Desktop"
+	}
+}
+
+// isValidWalletAddress validates a wallet address format
+func isValidWalletAddress(address string) bool {
+	// Basic validation - can be expanded for different chains
+	if len(address) < 10 {
+		return false
+	}
+
+	// If Ethereum-style address (0x...)
+	if strings.HasPrefix(address, "0x") {
+		return len(address) == 42
+	}
+
+	return true
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/demola234/defifundr/internal/adapters/dto/request"
 	"github.com/demola234/defifundr/internal/adapters/dto/response"
 	"github.com/demola234/defifundr/internal/core/ports"
-	"github.com/demola234/defifundr/pkg/app_errors"
+	appErrors "github.com/demola234/defifundr/pkg/app_errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -48,7 +48,7 @@ func (h *WaitlistHandler) JoinWaitlist(ctx *gin.Context) {
 	var req request.WaitlistJoinRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: app_errors.ErrInvalidRequest.Error(),
+			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,
 		})
 		return
@@ -57,7 +57,7 @@ func (h *WaitlistHandler) JoinWaitlist(ctx *gin.Context) {
 	// Validate request data
 	if err := req.Validate(); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: app_errors.ErrInvalidRequest.Error(),
+			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,
 		})
 		return
@@ -67,15 +67,15 @@ func (h *WaitlistHandler) JoinWaitlist(ctx *gin.Context) {
 	entry, err := h.waitlistService.JoinWaitlist(ctx, req.Email, req.FullName, req.ReferralSource)
 	if err != nil {
 		errResponse := response.ErrorResponse{
-			Message: app_errors.ErrInternalServer.Error(),
+			Message: appErrors.ErrInternalServer.Error(),
 			Success: false,
 		}
 
-		if app_errors.IsAppError(err) {
-			appErr := err.(*app_errors.AppError)
+		if appErrors.IsAppError(err) {
+			appErr := err.(*appErrors.AppError)
 			errResponse.Message = appErr.Error()
 
-			if appErr.ErrorType == app_errors.ErrorTypeConflict {
+			if appErr.ErrorType == appErrors.ErrorTypeConflict {
 				ctx.JSON(http.StatusConflict, errResponse)
 				return
 			}

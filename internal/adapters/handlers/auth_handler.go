@@ -1,26 +1,28 @@
 package handlers
 
 import (
-	"fmt"
+	"context"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	"github.com/demola234/defifundr/internal/adapters/dto/request"
 	"github.com/demola234/defifundr/internal/adapters/dto/response"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
+	appErrors "github.com/demola234/defifundr/pkg/app_errors"
 	token "github.com/demola234/defifundr/pkg/token_maker"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
+// AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
 	authService ports.AuthService
 	logger      logging.Logger
 }
 
-// NewAuthHandler creates a new authentication handler
+// NewAuthHandler creates a new auth handler
 func NewAuthHandler(authService ports.AuthService, logger logging.Logger) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
@@ -28,20 +30,318 @@ func NewAuthHandler(authService ports.AuthService, logger logging.Logger) *AuthH
 	}
 }
 
-// Login handles user login
-// @Summary Login a user
-// @Description Logs in a user with the provided credentials
+func (h *AuthHandler) GetUserRepository() ports.UserRepository {
+	// Cast to authService to access userRepo (add a method to the interface if preferred)
+	if service, ok := h.authService.(interface{ GetUserRepository() ports.UserRepository }); ok {
+		return service.GetUserRepository()
+	}
+	return nil
+}
+
+// Web3AuthLogin handles login/registration with Web3Auth
+// @Summary Login or register with Web3Auth
+// @Description Authenticate or create a new user with Web3Auth tokens
 // @Tags authentication
 // @Accept json
 // @Produce json
-// @Param loginRequest body request.LoginRequest true "Login request"
-// @Success 200 {object} response.SuccessResponse "Successfully logged in"
+// @Param loginRequest body request.Web3AuthLoginRequest true "Web3Auth token"
+// @Success 200 {object} response.SuccessResponse "Authentication successful"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
-// @Failure 404 {object} response.ErrorResponse "User not found"
+// @Failure 401 {object} response.ErrorResponse "Authentication failed"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/web3auth/login [post]
+func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
+	// Extract request correlation ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	var req request.Web3AuthLoginRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	// Validate request
+	if req.WebAuthToken == "" {
+		reqLogger.Error("Missing Web3Auth token", nil, nil)
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Web3Auth token is required",
+		})
+		return
+	}
+
+	// Authenticate with Web3Auth
+	user, session, err := h.authService.AuthenticateWithWeb3(
+		ctx,
+		req.WebAuthToken,
+		ctx.Request.UserAgent(),
+		ctx.ClientIP(),
+	)
+
+	if err != nil {
+		reqLogger.Error("Failed to authenticate with Web3Auth", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Authentication failed: " + err.Error(),
+		})
+		return
+	}
+
+	// Check profile completion status
+	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, user.ID)
+	var completionData *response.ProfileCompletionResponse
+
+	if err == nil {
+		completionData = &response.ProfileCompletionResponse{
+			CompletionPercentage: profileCompletion.CompletionPercentage,
+			MissingFields:        profileCompletion.MissingFields,
+			RequiredActions:      profileCompletion.RequiredActions,
+		}
+	} else {
+		reqLogger.Error("Failed to get profile completion status", err, map[string]interface{}{
+			"user_id": user.ID,
+		})
+	}
+
+	// Get user wallets
+	wallets, err := h.authService.GetUserWallets(ctx, user.ID)
+	var walletResponses []response.UserWalletResponse
+
+	if err == nil {
+		walletResponses = make([]response.UserWalletResponse, len(wallets))
+		for i, wallet := range wallets {
+			walletResponses[i] = response.UserWalletResponse{
+				ID:        wallet.ID.String(),
+				Address:   wallet.Address,
+				Type:      wallet.Type,
+				Chain:     wallet.Chain,
+				IsDefault: wallet.IsDefault,
+			}
+		}
+	} else {
+		reqLogger.Error("Failed to get user wallets", err, map[string]interface{}{
+			"user_id": user.ID,
+		})
+	}
+
+	// Create the session response
+	sessionResponse := response.SessionResponse{
+		ID:            session.ID,
+		UserID:        user.ID,
+		AccessToken:   session.OAuthAccessToken,
+		UserLoginType: session.UserLoginType,
+		ExpiresAt:     session.ExpiresAt,
+		CreatedAt:     session.CreatedAt,
+	}
+
+	// Create user response
+	profilePicture := ""
+	if user.ProfilePicture != nil {
+		profilePicture = *user.ProfilePicture
+	}
+
+	userResponse := response.LoginUserResponse{
+		ID:             user.ID.String(),
+		Email:          user.Email,
+		ProfilePicture: profilePicture,
+		AccountType:    user.AccountType,
+		FirstName:      user.FirstName,
+		LastName:       user.LastName,
+		AuthProvider:   user.AuthProvider,
+		ProviderID:     user.ProviderID,
+		CreatedAt:      user.CreatedAt,
+		UpdatedAt:      user.UpdatedAt,
+	}
+
+	// Determine if this is a new registration (user created in the same transaction)
+	isNewUser := session.CreatedAt.Sub(user.CreatedAt) < time.Minute
+
+	// Return success response
+	responseData := map[string]interface{}{
+		"user":               userResponse,
+		"session":            sessionResponse,
+		"profile_completion": completionData,
+		"wallets":            walletResponses,
+	}
+
+	// Add onboarding data for new users
+	if isNewUser {
+		responseData["is_new_user"] = true
+		responseData["onboarding_steps"] = []string{
+			"complete_profile",
+			"verify_email",
+			"link_wallet",
+		}
+	}
+
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Authentication successful",
+		Data:    responseData,
+	})
+
+	reqLogger.Info("Web3Auth login successful", map[string]interface{}{
+		"user_id":     user.ID,
+		"is_new_user": isNewUser,
+	})
+}
+
+// RegisterUser handles new user registration with email/password
+// @Summary Register a new user
+// @Description Register a new user with email and password
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param registerRequest body request.RegisterUserRequest true "User registration details"
+// @Success 201 {object} response.SuccessResponse "User registered successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 409 {object} response.ErrorResponse "Email already registered"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/register [post]
+func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	var req request.RegisterUserRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid registration request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	// Create user domain object
+	user := domain.User{
+		ID:           uuid.New(),
+		Email:        req.Email,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
+		AuthProvider: req.Provider,
+		WebAuthToken: req.WebAuthToken,
+		AccountType:  "personal",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Register user
+	createdUser, err := h.authService.RegisterUser(ctx, user, req.Password)
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "Failed to register user"
+
+		// Check for specific errors
+		if appErr, ok := err.(appErrors.AppError); ok {
+			status = appErr.StatusCode()
+			message = appErr.Error()
+		} else if err.Error() == "email already registered" {
+			status = http.StatusConflict
+			message = "Email already registered"
+		}
+
+		reqLogger.Error("User registration failed", err, map[string]interface{}{
+			"email": req.Email,
+		})
+
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: message,
+		})
+		return
+	}
+
+	// Create a session
+	session, err := h.authService.CreateSession(
+		ctx,
+		createdUser.ID,
+		ctx.Request.UserAgent(),
+		ctx.ClientIP(),
+		"",
+		createdUser.Email,
+		"email",
+	)
+
+	if err != nil {
+		reqLogger.Error("Failed to create session", err, map[string]interface{}{
+			"user_id": createdUser.ID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Registration successful but failed to create session",
+		})
+		return
+	}
+
+	// Create user response
+	userResponse := response.LoginUserResponse{
+		ID:           createdUser.ID.String(),
+		Email:        createdUser.Email,
+		FirstName:    createdUser.FirstName,
+		LastName:     createdUser.LastName,
+		AccountType:  createdUser.AccountType,
+		AuthProvider: createdUser.AuthProvider,
+		CreatedAt:    createdUser.CreatedAt,
+		UpdatedAt:    createdUser.UpdatedAt,
+	}
+
+	// Create session response
+	sessionResponse := response.SessionResponse{
+		ID:            session.ID,
+		UserID:        createdUser.ID,
+		AccessToken:   session.OAuthAccessToken,
+		UserLoginType: session.UserLoginType,
+		ExpiresAt:     session.ExpiresAt,
+		CreatedAt:     session.CreatedAt,
+	}
+
+	// Return success with onboarding steps
+	ctx.JSON(http.StatusCreated, response.SuccessResponse{
+		Success: true,
+		Message: "User registered successfully",
+		Data: map[string]interface{}{
+			"user":    userResponse,
+			"session": sessionResponse,
+			"onboarding_steps": []string{
+				"complete_profile",
+				"verify_email",
+			},
+		},
+	})
+
+	reqLogger.Info("User registered successfully", map[string]interface{}{
+		"user_id": createdUser.ID,
+		"email":   createdUser.Email,
+	})
+}
+
+// Login handles user login with email/password
+// @Summary Login with email/password
+// @Description Login with email and password credentials
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param loginRequest body request.LoginRequest true "User login credentials"
+// @Success 200 {object} response.SuccessResponse "Login successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Invalid email or password"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(ctx *gin.Context) {
-	// Extract request correlation ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
 	reqLogger.Debug("Processing login request")
@@ -53,16 +353,13 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		})
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid request format",
+			Message: "Invalid request format: " + err.Error(),
 		})
 		return
 	}
 
-	// Validate request
 	if err := req.Validate(); err != nil {
-		reqLogger.Error("Invalid login credentials", err, map[string]interface{}{
-			"error": err.Error(),
-		})
+		reqLogger.Error("Validation failed", err, nil)
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Success: false,
 			Message: err.Error(),
@@ -70,492 +367,445 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		return
 	}
 
-	// Create user data for login
-	userData := domain.User{
+	user := domain.User{
 		Email:        req.Email,
-		Password:     &req.Password,
-		ProviderID:   req.ProviderID,
 		AuthProvider: req.Provider,
+		ProviderID:   req.ProviderID,
 		WebAuthToken: req.WebAuthToken,
 	}
 
-	// Attempt login
-	authUser, err := h.authService.Login(ctx, req.Email, userData, req.Password)
+	loggedInUser, err := h.authService.Login(ctx, req.Email, user, req.Password)
 	if err != nil {
-		reqLogger.Error("Failed to login", err, map[string]interface{}{
+		reqLogger.Error("Login failed", err, map[string]interface{}{
 			"email": req.Email,
-			"error": err.Error(),
 		})
 		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid credentials",
+			Message: "Invalid email or password",
 		})
 		return
 	}
 
-	// If Provider is "email", then ProviderID is set to the email
-	if req.Provider == "email" {
-		authUser.ProviderID = req.Email
-	}
-
-	// Create session and generate access token
-	session, err := h.authService.CreateSession(ctx, authUser.ID, ctx.Request.UserAgent(), ctx.ClientIP(), req.WebAuthToken, authUser.Email, "login")
+	session, err := h.authService.CreateSession(ctx, loggedInUser.ID, ctx.Request.UserAgent(), ctx.ClientIP(), req.WebAuthToken, loggedInUser.Email, "login")
 	if err != nil {
-		reqLogger.Error("Failed to generate access token", err, map[string]interface{}{
-			"user_id": authUser.ID,
-		})
+		reqLogger.Error("Failed to create session", err, nil)
 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Success: false,
-			Message: "Failed to generate access token",
+			Message: "Login successful but failed to create session",
 		})
 		return
 	}
 
-	// Log successful login
-	reqLogger.Info("User logged in successfully", map[string]interface{}{
-		"user_id": authUser.ID.String(),
-		"email":   authUser.Email,
-	})
+	profilePicture := ""
+	if loggedInUser.ProfilePicture != nil {
+		profilePicture = *loggedInUser.ProfilePicture
+	}
 
-	// Create the session response
+	userResponse := response.LoginUserResponse{
+		ID:             loggedInUser.ID.String(),
+		Email:          loggedInUser.Email,
+		ProfilePicture: profilePicture,
+		AccountType:    loggedInUser.AccountType,
+		FirstName:      loggedInUser.FirstName,
+		LastName:       loggedInUser.LastName,
+		AuthProvider:   loggedInUser.AuthProvider,
+		ProviderID:     loggedInUser.ProviderID,
+		CreatedAt:      loggedInUser.CreatedAt,
+		UpdatedAt:      loggedInUser.UpdatedAt,
+	}
+
 	sessionResponse := response.SessionResponse{
 		ID:            session.ID,
-		UserID:        authUser.ID,
-		UserAgent:     session.UserAgent,
-		ClientIP:      session.ClientIP,
+		UserID:        loggedInUser.ID,
 		AccessToken:   session.OAuthAccessToken,
 		UserLoginType: req.Provider,
 		ExpiresAt:     session.ExpiresAt,
 		CreatedAt:     session.CreatedAt,
 	}
 
-	// Create the user response based on account type
-	var userResponse response.LoginUserResponse
-
-	// Fill in common fields
-	userResponse = response.LoginUserResponse{
-		ID:             authUser.ID.String(),
-		Email:          authUser.Email,
-		ProfilePicture: *authUser.ProfilePicture,
-		AccountType:    authUser.AccountType,
-		FirstName:      authUser.FirstName,
-		LastName:       authUser.LastName,
-		AuthProvider:   authUser.AuthProvider,
-		ProviderID:     authUser.ProviderID,
-		CreatedAt:      authUser.CreatedAt,
-		UpdatedAt:      authUser.UpdatedAt,
-	}
-
-	// Add account-specific fields
-	if authUser.AccountType == "business" {
-		// Add business-specific fields
-		userResponse.CompanyName = authUser.CompanyName
-		userResponse.CompanyAddress = authUser.CompanyAddress
-		userResponse.CompanyCity = authUser.CompanyCity
-		userResponse.CompanyPostalCode = authUser.CompanyPostalCode
-		userResponse.CompanyCountry = authUser.CompanyCountry
-
-		// Add optional fields if available
-		if authUser.CompanyWebsite != nil {
-			userResponse.CompanyWebsite = *authUser.CompanyWebsite
-		}
-
-		if authUser.EmploymentType != nil {
-			userResponse.EmploymentType = *authUser.EmploymentType
-		}
-	} else {
-		// Add personal account fields
-
-		userResponse.PersonalAccountType = authUser.PersonalAccountType
-		userResponse.Nationality = authUser.Nationality
-		userResponse.UserCity = authUser.City
-		userResponse.UserPostalCode = authUser.PostalCode
-
-		// Add optional fields if available
-		if authUser.UserAddress != nil {
-			userResponse.UserAddress = *authUser.UserAddress
-		}
-	}
-
-	// Return success response with user and token information
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
-		Message: "User logged in successfully",
-		Data: response.LoginResponse{
-			User:        userResponse,
-			AccessToken: sessionResponse,
-			ExpiresAt:   session.ExpiresAt,
-			SessionID:   session.ID,
+		Message: "Login successful",
+		Data: map[string]interface{}{
+			"user":    userResponse,
+			"session": sessionResponse,
 		},
 	})
 }
 
-// RegisterUser handles user registration
-// @Summary Register a new user
-// @Description Create a new user account
+// RefreshToken refreshes an access token
+// @Summary Refresh access token
+// @Description Refresh an expired access token using a refresh token
 // @Tags authentication
 // @Accept json
 // @Produce json
-// @Param register body request.RegisterUserRequest true "User registration data"
-// @Success 201 {object} response.SuccessResponse "Successfully registered"
+// @Param refreshRequest body request.RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} response.SuccessResponse "Token refreshed successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
-// @Failure 409 {object} response.ErrorResponse "User already exists"
-// @Failure 429 {object} response.ErrorResponse "Too many requests"
-// @Router /auth/register [post]
-func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
-	// Extract request correlation ID
+// @Failure 401 {object} response.ErrorResponse "Invalid or expired refresh token"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/refresh [post]
+func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
+	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing register user request")
+	reqLogger.Debug("Processing login request")
 
-	var req request.RegisterUserRequest
+	var req request.RefreshTokenRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		reqLogger.Error("Invalid registration request", err, map[string]interface{}{
+		reqLogger.Error("Invalid refresh token request format", err, map[string]interface{}{
 			"error": err.Error(),
 		})
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid registration request",
+			Message: "Invalid request format: " + err.Error(),
 		})
 		return
 	}
 
-	// Basic validation
-	if req.Provider != "" && req.Provider != "email" && req.WebAuthToken == "" {
-		reqLogger.Error("Missing web auth token for provider", nil, map[string]interface{}{
-			"provider": req.Provider,
-			"email":    req.Email,
-		})
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Success: false,
-			Message: "Web auth token is required for provider authentication",
-		})
-		return
-	}
+	// Refresh token
+	session, accessToken, err := h.authService.RefreshToken(
+		ctx,
+		req.RefreshToken,
+		ctx.Request.UserAgent(),
+		ctx.ClientIP(),
+	)
 
-	// Create user domain model from request
-	user := domain.User{
-		ID:           uuid.New(),
-		Email:        req.Email,
-		FirstName:    req.FirstName,
-		LastName:     req.LastName,
-		AuthProvider: req.Provider,
-		ProviderID:   req.ProviderID,
-		WebAuthToken: req.WebAuthToken,
-		// Set default values for required fields
-		AccountType:         "personal", // Default account type
-		PersonalAccountType: "user",     // Default personal account type
-		Nationality:         "unknown",  // This will need to be updated later
-	}
-
-	// Register the user
-	createdUser, err := h.authService.RegisterUser(ctx, user, req.Password)
 	if err != nil {
-		statusCode := http.StatusInternalServerError
-		errorMessage := fmt.Sprintf("Failed to register user: %s", err.Error())
+		status := http.StatusUnauthorized
+		message := "Invalid or expired refresh token"
 
-		// Map specific errors to appropriate status codes
-		if strings.Contains(strings.ToLower(err.Error()), "already registered") ||
-			strings.Contains(strings.ToLower(err.Error()), "already exists") {
-			statusCode = http.StatusConflict
-			errorMessage = "Email already registered"
-		} else if strings.Contains(strings.ToLower(err.Error()), "invalid") ||
-			strings.Contains(strings.ToLower(err.Error()), "required") {
-			statusCode = http.StatusBadRequest
-			errorMessage = err.Error()
+		if appErr, ok := err.(appErrors.AppError); ok {
+			status = appErr.StatusCode()
+			message = appErr.Error()
 		}
 
-		reqLogger.Error("Failed to register user", err, map[string]interface{}{
-			"email": req.Email,
-			"error": err.Error(),
-		})
+		reqLogger.Error("Failed to refresh token", err, nil)
 
-		ctx.JSON(statusCode, response.ErrorResponse{
+		ctx.JSON(status, response.ErrorResponse{
 			Success: false,
-			Message: errorMessage,
+			Message: message,
 		})
 		return
 	}
 
-	// If Provider is "email", then ProviderID is set to the email
-	if req.Provider == "email" {
-		createdUser.ProviderID = req.Email
-	}
-
-	// Create session and generate access token
-	session, err := h.authService.CreateSession(ctx, createdUser.ID, ctx.Request.UserAgent(), ctx.ClientIP(), req.WebAuthToken, createdUser.Email, "registration")
-	if err != nil {
-		reqLogger.Error("Failed to generate access token", err, map[string]interface{}{
-			"user_id": createdUser.ID,
-		})
-		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
-			Success: false,
-			Message: "Failed to generate access token",
-		})
-		return
-	}
-
-	// Log successful registration
-	reqLogger.Info("User registered successfully", map[string]interface{}{
-		"user_id": createdUser.ID.String(),
-		"email":   createdUser.Email,
-	})
-
-	// Create the session response
-
+	// Create session response
 	sessionResponse := response.SessionResponse{
 		ID:            session.ID,
-		UserID:        createdUser.ID,
-		UserAgent:     session.UserAgent,
-		ClientIP:      session.ClientIP,
-		AccessToken:   session.OAuthAccessToken,
-		UserLoginType: req.Provider,
+		UserID:        session.UserID,
+		AccessToken:   accessToken,
+		UserLoginType: session.UserLoginType,
 		ExpiresAt:     session.ExpiresAt,
 		CreatedAt:     session.CreatedAt,
 	}
 
-	// Return success response with user and token information
-	ctx.JSON(http.StatusCreated, response.SuccessResponse{
+	// Return success
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
-		Message: "User registered successfully",
-		Data: response.RegistrationResponse{
-			User: response.UserResponse{
-				ID:         createdUser.ID.String(),
-				Email:      createdUser.Email,
-				FirstName:  createdUser.FirstName,
-				LastName:   createdUser.LastName,
-				Provider:   createdUser.AuthProvider,
-				ProviderID: createdUser.ProviderID,
-				CreatedAt:  createdUser.CreatedAt,
-				UpdatedAt:  createdUser.UpdatedAt,
-			},
-			AccessToken: sessionResponse,
-			ExpiresAt:   session.ExpiresAt,
-			SessionID:   session.ID,
+		Message: "Token refreshed successfully",
+		Data: map[string]interface{}{
+			"session": sessionResponse,
 		},
+	})
+
+	reqLogger.Info("Token refreshed successfully", map[string]interface{}{
+		"session_id": session.ID,
+		"user_id":    session.UserID,
 	})
 }
 
-// RegisterUserPersonalDetails handles updating a user's personal details
-// @Summary Update user personal details
+// UpdatePersonalDetails updates user personal details
+// @Summary Update personal details
 // @Description Update personal details for a registered user
-// @Tags authentication
+// @Tags profile
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param personalDetails body request.RegisterPersonalDetailsRequest true "User personal details"
-// @Success 200 {object} response.SuccessResponse "Successfully updated personal details"
+// @Param personalDetails body request.RegisterPersonalDetailsRequest true "Personal details"
+// @Success 200 {object} response.SuccessResponse "Personal details updated successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /auth/register/user/personal-details [post]
-func (h *AuthHandler) RegisterUserPersonalDetails(ctx *gin.Context) {
-	// Extract request correlation ID
+// @Router /auth/profile/personal-details [put]
+
+func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
+	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing register user personal details request")
+	reqLogger.Debug("Processing login request")
 
-	// Get userID from authorization payload in context
-	authPayload, exists := ctx.Get("authorization_payload")
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "authorization payload not found"})
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
 		return
 	}
 
-	user := authPayload.(*token.Payload)
-	// Parse request body
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
 	var req request.RegisterPersonalDetailsRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		reqLogger.Error("Invalid request format", err, map[string]interface{}{
+		reqLogger.Error("Invalid personal details request format", err, map[string]interface{}{
 			"error": err.Error(),
 		})
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid request format",
+			Message: "Invalid request format: " + err.Error(),
 		})
 		return
 	}
 
-	// Validate request
-	if err := req.Validate(); err != nil {
-		reqLogger.Error("Invalid personal details", err, map[string]interface{}{
-			"error": err.Error(),
-		})
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Success: false,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	// Create user domain model with updated fields
-	userDetails := domain.User{
-		ID:                  user.UserID,
-		Nationality:         req.Nationality,
-		AccountType:         req.AccountType,
-		PersonalAccountType: req.PersonalAccountType,
-	}
-
-	// Add optional fields if provided
-	if req.PhoneNumber != "" {
-		userDetails.PhoneNumber = &req.PhoneNumber
-	}
-
-	// Update user through service
-	updatedUser, err := h.authService.RegisterPersonalDetails(ctx, userDetails)
+	// Get current user data
+	currentUser, err := h.authService.GetUserByID(ctx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to update personal details", err, map[string]interface{}{
-			"user_id": user.UserID,
-			"error":   err.Error(),
+		reqLogger.Error("Failed to get user by ID", err, map[string]interface{}{
+			"user_id": userUUID,
 		})
 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Success: false,
-			Message: "Failed to update personal details",
+			Message: "Failed to retrieve user data",
 		})
 		return
 	}
 
-	// Return success response
-	reqLogger.Info("Personal details updated successfully", map[string]interface{}{
-		"user_id": user.UserID,
-	})
+	// Update user with new details
+	currentUser.FirstName = req.FirstName
+	currentUser.LastName = req.LastName
+	currentUser.Nationality = req.Nationality
+	currentUser.PersonalAccountType = req.PersonalAccountType
+
+	if req.PhoneNumber != "" {
+		phoneNumber := req.PhoneNumber
+		currentUser.PhoneNumber = &phoneNumber
+	}
+
+	// Update user
+	updatedUser, err := h.authService.RegisterPersonalDetails(ctx, *currentUser)
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "Failed to update personal details"
+
+		if appErr, ok := err.(appErrors.AppError); ok {
+			status = appErr.StatusCode()
+			message = appErr.Error()
+		}
+
+		reqLogger.Error("Failed to update personal details", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: message,
+		})
+		return
+	}
+
+	// Create user response
+	profilePicture := ""
+	if updatedUser.ProfilePicture != nil {
+		profilePicture = *updatedUser.ProfilePicture
+	}
+
+	userResponse := response.LoginUserResponse{
+		ID:                  updatedUser.ID.String(),
+		Email:               updatedUser.Email,
+		ProfilePicture:      profilePicture,
+		AccountType:         updatedUser.AccountType,
+		FirstName:           updatedUser.FirstName,
+		LastName:            updatedUser.LastName,
+		Nationality:         updatedUser.Nationality,
+		PersonalAccountType: updatedUser.PersonalAccountType,
+		CreatedAt:           updatedUser.CreatedAt,
+		UpdatedAt:           updatedUser.UpdatedAt,
+	}
+
+	// Get updated profile completion
+	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, updatedUser.ID)
+	var completionData *response.ProfileCompletionResponse
+
+	if err == nil {
+		completionData = &response.ProfileCompletionResponse{
+			CompletionPercentage: profileCompletion.CompletionPercentage,
+			MissingFields:        profileCompletion.MissingFields,
+			RequiredActions:      profileCompletion.RequiredActions,
+		}
+	}
+
+	// Return success
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
 		Message: "Personal details updated successfully",
-		Data: response.UserResponse{
-			ID:         updatedUser.ID.String(),
-			Email:      updatedUser.Email,
-			FirstName:  updatedUser.FirstName,
-			LastName:   updatedUser.LastName,
-			Provider:   updatedUser.AuthProvider,
-			ProviderID: updatedUser.ProviderID,
-			CreatedAt:  updatedUser.CreatedAt,
-			UpdatedAt:  updatedUser.UpdatedAt,
+		Data: map[string]interface{}{
+			"user":               userResponse,
+			"profile_completion": completionData,
 		},
+	})
+
+	reqLogger.Info("Personal details updated successfully", map[string]interface{}{
+		"user_id": updatedUser.ID,
 	})
 }
 
-// RegisterUserAddressDetails handles updating a user's address details
-// @Summary Update user address details
+// UpdateAddressDetails updates user address details
+// @Summary Update address details
 // @Description Update address details for a registered user
-// @Tags authentication
+// @Tags profile
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param addressDetails body request.RegisterAddressDetailsRequest true "User address details"
-// @Success 200 {object} response.SuccessResponse "Successfully updated address details"
+// @Param addressDetails body request.RegisterAddressDetailsRequest true "Address details"
+// @Success 200 {object} response.SuccessResponse "Address details updated successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /auth/register/user/address-details [post]
-func (h *AuthHandler) RegisterUserAddressDetails(ctx *gin.Context) {
-	// Extract request correlation ID
+// @Router /auth/profile/address [put]
+func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
+	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing register user address details request")
+	reqLogger.Debug("Processing login request")
 
-	// Get userID from authorization payload in context
-	authPayload, exists := ctx.Get("authorization_payload")
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "authorization payload not found"})
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
 		return
 	}
 
-	user := authPayload.(*token.Payload)
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
 
-	// Parse request body
 	var req request.RegisterAddressDetailsRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		reqLogger.Error("Invalid request format", err, map[string]interface{}{
+		reqLogger.Error("Invalid address details request format", err, map[string]interface{}{
 			"error": err.Error(),
 		})
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid request format",
+			Message: "Invalid request format: " + err.Error(),
 		})
 		return
 	}
 
-	// Validate request
-	if err := req.Validate(); err != nil {
-		reqLogger.Error("Invalid address details", err, map[string]interface{}{
-			"error": err.Error(),
-		})
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Success: false,
-			Message: err.Error(),
-		})
-		return
-	}
-
-	// Create user domain model with the updated address details
-	userDetails := domain.User{
-		ID:          user.UserID,
-		UserAddress: &req.AddressLine1,
-		City:        req.City,
-		PostalCode:  req.PostalCode,
-	}
-
-	// Update user through service
-	updatedUser, err := h.authService.RegisterAddressDetails(ctx, userDetails)
+	// Get current user data
+	currentUser, err := h.authService.GetUserByID(ctx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to update address details", err, map[string]interface{}{
-			"user_id": user.UserID,
-			"error":   err.Error(),
+		reqLogger.Error("Failed to get user by ID", err, map[string]interface{}{
+			"user_id": userUUID,
 		})
 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Success: false,
-			Message: "Failed to update address details",
+			Message: "Failed to retrieve user data",
 		})
 		return
 	}
 
-	// Return success response
-	reqLogger.Info("Address details updated successfully", map[string]interface{}{
-		"user_id": user.UserID,
-	})
+	// Update user with new details
+	userAddress := req.UserAddress
+	currentUser.UserAddress = &userAddress
+	currentUser.City = req.City
+	currentUser.PostalCode = req.PostalCode
+	currentUser.ResidentialCountry = &req.Country
+
+	// Update user
+	updatedUser, err := h.authService.RegisterAddressDetails(ctx, *currentUser)
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "Failed to update address details"
+
+		if appErr, ok := err.(appErrors.AppError); ok {
+			status = appErr.StatusCode()
+			message = appErr.Error()
+		}
+
+		reqLogger.Error("Failed to update address details", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: message,
+		})
+		return
+	}
+
+	// Get updated profile completion
+	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, updatedUser.ID)
+	var completionData *response.ProfileCompletionResponse
+
+	if err == nil {
+		completionData = &response.ProfileCompletionResponse{
+			CompletionPercentage: profileCompletion.CompletionPercentage,
+			MissingFields:        profileCompletion.MissingFields,
+			RequiredActions:      profileCompletion.RequiredActions,
+		}
+	}
+
+	// Return success
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
 		Message: "Address details updated successfully",
-		Data: response.UserResponse{
-			ID:         updatedUser.ID.String(),
-			Email:      updatedUser.Email,
-			FirstName:  updatedUser.FirstName,
-			LastName:   updatedUser.LastName,
-			Provider:   updatedUser.AuthProvider,
-			ProviderID: updatedUser.ProviderID,
-			CreatedAt:  updatedUser.CreatedAt,
-			UpdatedAt:  updatedUser.UpdatedAt,
+		Data: map[string]interface{}{
+			"user":               updatedUser,
+			"profile_completion": completionData,
 		},
+	})
+
+	reqLogger.Info("Address details updated successfully", map[string]interface{}{
+		"user_id": updatedUser.ID,
 	})
 }
 
-// RegisterBusinessDetails handles updating a user's business details
+// UpdateBusinessDetails handles updating a user's business details
 // @Summary Update business details
 // @Description Update business details for a registered user
-// @Tags authentication
+// @Tags profile
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param businessDetails body request.RegisterBusinessDetailsRequest true "Business details"
-// @Success 200 {object} response.SuccessResponse "Successfully updated business details"
+// @Success 200 {object} response.SuccessResponse "Business details updated successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /auth/register/business/business-details [post]
-func (h *AuthHandler) RegisterBusinessDetails(ctx *gin.Context) {
-	// Extract request correlation ID
+// @Router /auth/profile/business [put]
+func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
+	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing register business details request")
+	reqLogger.Debug("Processing update business details request")
 
 	// Get userID from authorization payload in context
 	authPayload, exists := ctx.Get("authorization_payload")
 	if !exists {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "authorization payload not found"})
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Authorization payload not found",
+		})
 		return
 	}
-
 	user := authPayload.(*token.Payload)
 
 	// Parse request body
@@ -566,15 +816,24 @@ func (h *AuthHandler) RegisterBusinessDetails(ctx *gin.Context) {
 		})
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid request format",
+			Message: "Invalid request format: " + err.Error(),
 		})
 		return
 	}
 
-	// Create user domain model with the updated business details
-	companyWebsite := req.CompanyWebsite
-	employmentType := req.CompanyType
+	// Validate request
+	if err := req.Validate(); err != nil {
+		reqLogger.Error("Invalid business details", err, nil)
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
 
+	// Create user domain object
+	companyWebsite := req.CompanyWebsite
+	employmentType := req.EmploymentType
 	userDetails := domain.User{
 		ID:                user.UserID,
 		CompanyName:       req.CompanyName,
@@ -584,21 +843,18 @@ func (h *AuthHandler) RegisterBusinessDetails(ctx *gin.Context) {
 		CompanyCountry:    req.CompanyCountry,
 	}
 
-	// Add optional fields if provided
 	if companyWebsite != "" {
 		userDetails.CompanyWebsite = &companyWebsite
 	}
-
 	if employmentType != "" {
 		userDetails.EmploymentType = &employmentType
 	}
 
-	// Update user through service
+	// Update user
 	updatedUser, err := h.authService.RegisterBusinessDetails(ctx, userDetails)
 	if err != nil {
 		reqLogger.Error("Failed to update business details", err, map[string]interface{}{
 			"user_id": user.UserID,
-			"error":   err.Error(),
 		})
 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Success: false,
@@ -607,94 +863,904 @@ func (h *AuthHandler) RegisterBusinessDetails(ctx *gin.Context) {
 		return
 	}
 
-	// Return success response
-	reqLogger.Info("Business details updated successfully", map[string]interface{}{
-		"user_id": user.UserID,
-	})
+	// Build response
+	resp := response.UserResponse{
+		ID:         updatedUser.ID.String(),
+		Email:      updatedUser.Email,
+		FirstName:  updatedUser.FirstName,
+		LastName:   updatedUser.LastName,
+		Provider:   updatedUser.AuthProvider,
+		ProviderID: updatedUser.ProviderID,
+		CreatedAt:  updatedUser.CreatedAt,
+		UpdatedAt:  updatedUser.UpdatedAt,
+	}
+
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
 		Message: "Business details updated successfully",
-		Data: response.UserResponse{
-			ID:         updatedUser.ID.String(),
-			Email:      updatedUser.Email,
-			FirstName:  updatedUser.FirstName,
-			LastName:   updatedUser.LastName,
-			Provider:   updatedUser.AuthProvider,
-			ProviderID: updatedUser.ProviderID,
-			CreatedAt:  updatedUser.CreatedAt,
-			UpdatedAt:  updatedUser.UpdatedAt,
-		},
+		Data:    resp,
+	})
+
+	reqLogger.Info("Business details updated successfully", map[string]interface{}{
+		"user_id": user.UserID,
 	})
 }
 
-// CheckEmailExists handles checking if an email already exists in the database
-// @Summary Check if email exists
-// @Description Check if an email address is already registered
-// @Tags authentication
-// @Accept json
+// GetProfileCompletion returns the user's profile completion status
+// @Summary Get profile completion status
+// @Description Retrieve the profile completion status for the authenticated user
+// @Tags profile
 // @Produce json
-// @Param email body request.CheckEmailRequest true "Email to check"
-// @Success 200 {object} response.SuccessResponse "Email check result"
-// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Security Bearer
+// @Success 200 {object} response.SuccessResponse{data=response.ProfileCompletionResponse} "Profile completion status retrieved"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /auth/register/user/check-email [post]
-func (h *AuthHandler) CheckEmailExists(ctx *gin.Context) {
-	// Extract request correlation ID
+// @Router /auth/profile/completion [get]
+func (h *AuthHandler) GetProfileCompletion(ctx *gin.Context) {
+	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing check email exists request")
+	reqLogger.Debug("Processing login request")
 
-	var req request.CheckEmailRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		reqLogger.Error("Invalid request format", err, map[string]interface{}{
-			"error": err.Error(),
-		})
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
 			Success: false,
-			Message: "Invalid request format",
+			Message: "Unauthorized",
 		})
 		return
 	}
 
-	// Validate request
-	if err := req.Validate(); err != nil {
-		reqLogger.Error("Invalid email", err, map[string]interface{}{
-			"error": err.Error(),
-		})
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Success: false,
-			Message: err.Error(),
+			Message: "Invalid user ID",
 		})
 		return
 	}
 
-	// Check if email exists
-	exists, err := h.authService.CheckEmailExists(ctx, req.Email)
+	// Get profile completion status
+	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to check email", err, map[string]interface{}{
-			"email": req.Email,
-			"error": err.Error(),
+		reqLogger.Error("Failed to get profile completion status", err, map[string]interface{}{
+			"user_id": userUUID,
 		})
 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 			Success: false,
-			Message: "Failed to check email",
+			Message: "Failed to get profile completion status",
 		})
 		return
 	}
 
-	// Log result
-	reqLogger.Info("Email check completed", map[string]interface{}{
-		"email":  req.Email,
-		"exists": exists,
-	})
+	// Create response
+	completionData := response.ProfileCompletionResponse{
+		CompletionPercentage: profileCompletion.CompletionPercentage,
+		MissingFields:        profileCompletion.MissingFields,
+		RequiredActions:      profileCompletion.RequiredActions,
+	}
 
-	// Return result
+	// Return success
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
-		Message: "Email check completed",
+		Message: "Profile completion status retrieved",
+		Data:    completionData,
+	})
+
+	reqLogger.Debug("Profile completion status retrieved", map[string]interface{}{
+		"user_id":    userUUID,
+		"completion": profileCompletion.CompletionPercentage,
+		"missing":    len(profileCompletion.MissingFields),
+		"actions":    len(profileCompletion.RequiredActions),
+	})
+}
+
+// LinkWallet links a blockchain wallet to a user
+// @Summary Link blockchain wallet
+// @Description Link a blockchain wallet to the authenticated user
+// @Tags wallet
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param walletDetails body request.LinkWalletRequest true "Wallet details"
+// @Success 200 {object} response.SuccessResponse "Wallet linked successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 409 {object} response.ErrorResponse "Wallet already linked to another account"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/wallet/link [post]
+
+func (h *AuthHandler) LinkWallet(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	var req request.LinkWalletRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid wallet request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	// Link wallet
+	err := h.authService.LinkWallet(ctx, userUUID, req.Address, req.Type, req.Chain)
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "Failed to link wallet"
+
+		if appErr, ok := err.(appErrors.AppError); ok {
+			status = appErr.StatusCode()
+			message = appErr.Error()
+		} else if err.Error() == "wallet already linked to another account" {
+			status = http.StatusConflict
+			message = "This wallet is already linked to another account"
+		} else if err.Error() == "invalid wallet address format" {
+			status = http.StatusBadRequest
+			message = "Invalid wallet address format"
+		}
+
+		reqLogger.Error("Failed to link wallet", err, map[string]interface{}{
+			"user_id": userUUID,
+			"address": req.Address,
+			"chain":   req.Chain,
+		})
+
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: message,
+		})
+		return
+	}
+
+	// Get all user wallets
+	wallets, err := h.authService.GetUserWallets(ctx, userUUID)
+	if err != nil {
+		reqLogger.Error("Failed to get user wallets", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+	}
+
+	// Create wallet responses
+	var walletResponses []response.UserWalletResponse
+	if err == nil {
+		walletResponses = make([]response.UserWalletResponse, len(wallets))
+		for i, wallet := range wallets {
+			walletResponses[i] = response.UserWalletResponse{
+				ID:        wallet.ID.String(),
+				Address:   wallet.Address,
+				Type:      wallet.Type,
+				Chain:     wallet.Chain,
+				IsDefault: wallet.IsDefault,
+			}
+		}
+	}
+
+	// Return success
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Wallet linked successfully",
 		Data: map[string]interface{}{
-			"email":  req.Email,
-			"exists": exists,
+			"wallets": walletResponses,
 		},
+	})
+
+	reqLogger.Info("Wallet linked successfully", map[string]interface{}{
+		"user_id": userUUID,
+		"address": req.Address,
+		"chain":   req.Chain,
+	})
+}
+
+// GetWallets returns all wallets for a user
+// @Summary Get user wallets
+// @Description Retrieve all blockchain wallets linked to the authenticated user
+// @Tags wallet
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} response.SuccessResponse "Wallets retrieved successfully"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/wallet [get]
+func (h *AuthHandler) GetWallets(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// Get all user wallets
+	wallets, err := h.authService.GetUserWallets(ctx, userUUID)
+	if err != nil {
+		reqLogger.Error("Failed to get user wallets", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to retrieve wallets",
+		})
+		return
+	}
+
+	// Create wallet responses
+	walletResponses := make([]response.UserWalletResponse, len(wallets))
+	for i, wallet := range wallets {
+		walletResponses[i] = response.UserWalletResponse{
+			ID:        wallet.ID.String(),
+			Address:   wallet.Address,
+			Type:      wallet.Type,
+			Chain:     wallet.Chain,
+			IsDefault: wallet.IsDefault,
+		}
+	}
+
+	// Return success
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Wallets retrieved successfully",
+		Data: map[string]interface{}{
+			"wallets": walletResponses,
+		},
+	})
+
+	reqLogger.Debug("User wallets retrieved", map[string]interface{}{
+		"user_id":      userUUID,
+		"wallet_count": len(wallets),
+	})
+}
+
+// GetUserDevices returns all active devices for the current user
+// @Summary Get active devices
+// @Description Retrieve all active devices/sessions for the authenticated user
+// @Tags security
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} response.SuccessResponse "Active devices retrieved"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/security/devices [get]
+func (h *AuthHandler) GetUserDevices(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// Get active devices
+	devices, err := h.authService.GetActiveDevices(ctx, userUUID)
+	if err != nil {
+		reqLogger.Error("Failed to get active devices", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to retrieve active devices",
+		})
+		return
+	}
+
+	// Convert to response objects
+	deviceResponses := make([]response.DeviceResponse, len(devices))
+	for i, device := range devices {
+		deviceResponses[i] = response.DeviceResponse{
+			SessionID:       device.SessionID.String(),
+			Browser:         device.Browser,
+			OperatingSystem: device.OperatingSystem,
+			DeviceType:      device.DeviceType,
+			IPAddress:       device.IPAddress,
+			LoginType:       device.LoginType,
+			LastUsed:        device.LastUsed,
+			CreatedAt:       device.CreatedAt,
+		}
+	}
+
+	// Return devices
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Active devices retrieved",
+		Data: map[string]interface{}{
+			"devices": deviceResponses,
+		},
+	})
+
+	reqLogger.Debug("User devices retrieved", map[string]interface{}{
+		"user_id":      userUUID,
+		"device_count": len(devices),
+	})
+}
+
+// RevokeDevice revokes a specific device/session
+// @Summary Revoke device
+// @Description Revoke a specific device/session for the authenticated user
+// @Tags security
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param revokeRequest body request.RevokeDeviceRequest true "Session ID to revoke"
+// @Success 200 {object} response.SuccessResponse "Device revoked successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 403 {object} response.ErrorResponse "Session does not belong to user"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/security/devices/revoke [post]
+func (h *AuthHandler) RevokeDevice(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// Get session ID from request
+	var req request.RevokeDeviceRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid revoke device request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	// Parse session ID
+	sessionID, err := uuid.Parse(req.SessionID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid session ID",
+		})
+		return
+	}
+
+	// Prevent revoking the current session
+	currentSessionID, _ := ctx.Get("session_id")
+	if currentSessionID != nil && currentSessionID.(uuid.UUID) == sessionID {
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Cannot revoke the current session. Use logout instead.",
+		})
+		return
+	}
+
+	// Revoke session
+	err = h.authService.RevokeSession(ctx, userUUID, sessionID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "Failed to revoke device"
+
+		if appErr, ok := err.(appErrors.AppError); ok {
+			status = appErr.StatusCode()
+			message = appErr.Error()
+		} else if err.Error() == "session does not belong to user" {
+			status = http.StatusForbidden
+			message = "Session does not belong to user"
+		}
+
+		reqLogger.Error("Failed to revoke device", err, map[string]interface{}{
+			"user_id":    userUUID,
+			"session_id": sessionID,
+		})
+
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: message,
+		})
+		return
+	}
+
+	// Get updated device list
+	devices, _ := h.authService.GetActiveDevices(ctx, userUUID)
+	var deviceResponses []response.DeviceResponse
+
+	if devices != nil {
+		deviceResponses = make([]response.DeviceResponse, len(devices))
+		for i, device := range devices {
+			deviceResponses[i] = response.DeviceResponse{
+				SessionID:       device.SessionID.String(),
+				Browser:         device.Browser,
+				OperatingSystem: device.OperatingSystem,
+				DeviceType:      device.DeviceType,
+				IPAddress:       device.IPAddress,
+				LoginType:       device.LoginType,
+				LastUsed:        device.LastUsed,
+				CreatedAt:       device.CreatedAt,
+			}
+		}
+	}
+
+	// Return success
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Device revoked successfully",
+		Data: map[string]interface{}{
+			"devices": deviceResponses,
+		},
+	})
+
+	reqLogger.Info("Device revoked successfully", map[string]interface{}{
+		"user_id":    userUUID,
+		"session_id": sessionID,
+	})
+}
+
+// GetUserSecurityEvents returns security events for the user's account
+// @Summary Get security events
+// @Description Retrieve security events for the authenticated user's account
+// @Tags security
+// @Produce json
+// @Security Bearer
+// @Param type query string false "Filter by event type"
+// @Param start_time query string false "Filter by start time (RFC3339 format)"
+// @Param end_time query string false "Filter by end time (RFC3339 format)"
+// @Success 200 {object} response.SuccessResponse "Security events retrieved"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/security/events [get]
+func (h *AuthHandler) GetUserSecurityEvents(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// Get optional filters
+	eventType := ctx.Query("type")
+	startTimeStr := ctx.Query("start_time")
+	endTimeStr := ctx.Query("end_time")
+
+	var startTime, endTime time.Time
+	var err error
+
+	if startTimeStr != "" {
+		startTime, err = time.Parse(time.RFC3339, startTimeStr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+				Success: false,
+				Message: "Invalid start time format",
+			})
+			return
+		}
+	} else {
+		// Default to 30 days ago
+		startTime = time.Now().AddDate(0, 0, -30)
+	}
+
+	if endTimeStr != "" {
+		endTime, err = time.Parse(time.RFC3339, endTimeStr)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+				Success: false,
+				Message: "Invalid end time format",
+			})
+			return
+		}
+	} else {
+		// Default to now
+		endTime = time.Now()
+	}
+
+	// Get events from security repository
+	// Note: authService should expose this method or have a dedicated method
+	securityRepo, ok := h.authService.(interface {
+		GetSecurityEvents(ctx context.Context, userID uuid.UUID, eventType string, startTime, endTime time.Time) ([]domain.SecurityEvent, error)
+	})
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Service does not support security events",
+		})
+		return
+	}
+
+	events, err := securityRepo.GetSecurityEvents(ctx, userUUID, eventType, startTime, endTime)
+	if err != nil {
+		reqLogger.Error("Failed to get security events", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to get security events",
+		})
+		return
+	}
+
+	// Convert to response objects
+	eventResponses := make([]response.SecurityEventResponse, len(events))
+	for i, event := range events {
+		eventResponses[i] = response.SecurityEventResponse{
+			ID:        event.ID.String(),
+			EventType: event.EventType,
+			IPAddress: event.IPAddress,
+			UserAgent: event.UserAgent,
+			Timestamp: event.Timestamp,
+			Metadata:  event.Metadata,
+		}
+	}
+
+	// Return events
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Security events retrieved",
+		Data: map[string]interface{}{
+			"events": eventResponses,
+			"filters": map[string]interface{}{
+				"start_time": startTime,
+				"end_time":   endTime,
+				"event_type": eventType,
+			},
+		},
+	})
+
+	reqLogger.Debug("Security events retrieved", map[string]interface{}{
+		"user_id":     userUUID,
+		"event_count": len(events),
+		"start_time":  startTime,
+		"end_time":    endTime,
+	})
+}
+
+// SetupMFA initiates MFA setup for the user
+// @Summary Setup MFA
+// @Description Initialize multi-factor authentication for the authenticated user
+// @Tags security
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} response.SuccessResponse "MFA setup initiated"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/security/mfa/setup [post]
+func (h *AuthHandler) SetupMFA(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// Set up MFA
+	totpURI, err := h.authService.SetupMFA(ctx, userUUID)
+	if err != nil {
+		reqLogger.Error("Failed to set up MFA", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to set up MFA: " + err.Error(),
+		})
+		return
+	}
+
+	// // Return success with TOTP URI
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "MFA setup initiated",
+		Data: map[string]interface{}{
+			"totp_uri": totpURI,
+		},
+	})
+
+	reqLogger.Info("MFA setup initiated", map[string]interface{}{
+		"user_id": userUUID,
+	})
+}
+
+// VerifyMFA verifies an MFA code
+// @Summary Verify MFA
+// @Description Verify an MFA code for the authenticated user
+// @Tags security
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param mfaCode body request.VerifyMFARequest true "MFA code"
+// @Success 200 {object} response.SuccessResponse "MFA code verified successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid MFA code"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/security/mfa/verify [post]
+func (h *AuthHandler) VerifyMFA(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Convert to UUID
+	userUUID, ok := userID.(uuid.UUID)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid user ID",
+		})
+		return
+	}
+
+	// Get code from request
+	var req request.VerifyMFARequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid MFA verification request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	// Verify code
+	valid, err := h.authService.VerifyMFA(ctx, userUUID, req.Code)
+	if err != nil {
+		reqLogger.Error("Failed to verify MFA code", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to verify MFA code: " + err.Error(),
+		})
+		return
+	}
+
+	if !valid {
+		reqLogger.Warn("Invalid MFA code provided", map[string]interface{}{
+			"user_id": userUUID,
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid MFA code",
+		})
+		return
+	}
+
+	// Mark the session as MFA verified
+	ctx.Set("mfa_verified", true)
+
+	// Return success
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "MFA code verified successfully",
+	})
+
+	reqLogger.Info("MFA code verified successfully", map[string]interface{}{
+		"user_id": userUUID,
+	})
+}
+
+// Logout logs out a user by revoking their session
+// @Summary Logout
+// @Description Logout the authenticated user by revoking their session
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param logoutRequest body request.LogoutRequest false "Session ID (optional, defaults to current session)"
+// @Success 200 {object} response.SuccessResponse "Logged out successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/logout [post]
+func (h *AuthHandler) Logout(ctx *gin.Context) {
+	// Extract request ID
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing login request")
+
+	// Get authenticated user ID
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+			Success: false,
+			Message: "Unauthorized",
+		})
+		return
+	}
+
+	// Get session ID from request
+	var req request.LogoutRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		// If no session ID provided, try to get from context
+		sessionID, exists := ctx.Get("session_id")
+		if !exists {
+			reqLogger.Error("No session ID provided for logout", nil, nil)
+			ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+				Success: false,
+				Message: "Session ID is required",
+			})
+			return
+		}
+
+		// Use session ID from context
+		sessionUUID, ok := sessionID.(uuid.UUID)
+		if !ok {
+			ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+				Success: false,
+				Message: "Invalid session ID",
+			})
+			return
+		}
+
+		// Logout
+		err = h.authService.Logout(ctx, sessionUUID)
+		if err != nil {
+			reqLogger.Error("Failed to logout", err, map[string]interface{}{
+				"session_id": sessionUUID,
+			})
+			ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+				Success: false,
+				Message: "Failed to logout: " + err.Error(),
+			})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, response.SuccessResponse{
+			Success: true,
+			Message: "Logged out successfully",
+		})
+		return
+	}
+
+	// Parse session ID from request
+	sessionID, err := uuid.Parse(req.SessionID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid session ID",
+		})
+		return
+	}
+
+	// Logout
+	err = h.authService.Logout(ctx, sessionID)
+	if err != nil {
+		reqLogger.Error("Failed to logout", err, map[string]interface{}{
+			"session_id": sessionID,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to logout: " + err.Error(),
+		})
+		return
+	}
+
+	// Return success
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Logged out successfully",
+	})
+
+	reqLogger.Info("User logged out", map[string]interface{}{
+		"user_id":    userID,
+		"session_id": sessionID,
 	})
 }
