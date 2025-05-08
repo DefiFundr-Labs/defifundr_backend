@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/demola234/defifundr/infrastructure/common/logging"
@@ -51,6 +53,10 @@ func (h *AuthHandler) GetUserRepository() ports.UserRepository {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/web3auth/login [post]
 func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "Web3AuthLogin")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request correlation ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -209,6 +215,10 @@ func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/register [post]
 func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "RegisterUser")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -342,6 +352,10 @@ func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "Login")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
 	reqLogger.Debug("Processing login request")
@@ -446,6 +460,10 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "RefreshToken")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -529,6 +547,10 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
 // @Router /auth/profile/personal-details [put]
 
 func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdatePersonalDetails")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -672,6 +694,10 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/address [put]
 func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdateAddressDetails")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -792,6 +818,10 @@ func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/business [put]
 func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdateBusinessDetails")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -832,26 +862,19 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 	}
 
 	// Create user domain object
-	companyWebsite := req.CompanyWebsite
-	employmentType := req.EmploymentType
-	userDetails := domain.User{
-		ID:                user.UserID,
-		CompanyName:       req.CompanyName,
-		CompanyAddress:    req.CompanyAddress,
-		CompanyCity:       req.CompanyCity,
-		CompanyPostalCode: req.CompanyPostalCode,
-		CompanyCountry:    req.CompanyCountry,
-	}
-
-	if companyWebsite != "" {
-		userDetails.CompanyWebsite = &companyWebsite
-	}
-	if employmentType != "" {
-		userDetails.EmploymentType = &employmentType
+	accountType := req.AccountType
+	userDetails := domain.CompanyInfo{
+		UserID:              user.UserID,
+		CompanyName:         &req.CompanyName,
+		CompanySize:         &req.CompanySize,
+		CompanyIndustry:     &req.CompanyIndustry,
+		CompanyDescription:  &req.CompanyDescription,
+		CompanyHeadquarters: &req.CompanyCountry,
+		AccountType:         accountType,
 	}
 
 	// Update user
-	updatedUser, err := h.authService.RegisterBusinessDetails(ctx, userDetails)
+	_, err := h.authService.RegisterBusinessDetails(ctx, userDetails)
 	if err != nil {
 		reqLogger.Error("Failed to update business details", err, map[string]interface{}{
 			"user_id": user.UserID,
@@ -863,22 +886,9 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 		return
 	}
 
-	// Build response
-	resp := response.UserResponse{
-		ID:         updatedUser.ID.String(),
-		Email:      updatedUser.Email,
-		FirstName:  updatedUser.FirstName,
-		LastName:   updatedUser.LastName,
-		Provider:   updatedUser.AuthProvider,
-		ProviderID: updatedUser.ProviderID,
-		CreatedAt:  updatedUser.CreatedAt,
-		UpdatedAt:  updatedUser.UpdatedAt,
-	}
-
 	ctx.JSON(http.StatusOK, response.SuccessResponse{
 		Success: true,
 		Message: "Business details updated successfully",
-		Data:    resp,
 	})
 
 	reqLogger.Info("Business details updated successfully", map[string]interface{}{
@@ -897,6 +907,10 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/completion [get]
 func (h *AuthHandler) GetProfileCompletion(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetProfileCompletion")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -973,6 +987,10 @@ func (h *AuthHandler) GetProfileCompletion(ctx *gin.Context) {
 // @Router /auth/wallet/link [post]
 
 func (h *AuthHandler) LinkWallet(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "LinkWallet")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1090,6 +1108,10 @@ func (h *AuthHandler) LinkWallet(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/wallet [get]
 func (h *AuthHandler) GetWallets(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetWallets")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1166,6 +1188,10 @@ func (h *AuthHandler) GetWallets(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/devices [get]
 func (h *AuthHandler) GetUserDevices(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetUserDevices")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1249,6 +1275,10 @@ func (h *AuthHandler) GetUserDevices(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/devices/revoke [post]
 func (h *AuthHandler) RevokeDevice(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "RevokeDevice")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1383,6 +1413,10 @@ func (h *AuthHandler) RevokeDevice(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/events [get]
 func (h *AuthHandler) GetUserSecurityEvents(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "GetUserSecurityEvents")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1515,6 +1549,10 @@ func (h *AuthHandler) GetUserSecurityEvents(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/mfa/setup [post]
 func (h *AuthHandler) SetupMFA(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "SetupMFA")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1581,6 +1619,10 @@ func (h *AuthHandler) SetupMFA(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/security/mfa/verify [post]
 func (h *AuthHandler) VerifyMFA(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "VerifyMFA")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1671,6 +1713,10 @@ func (h *AuthHandler) VerifyMFA(ctx *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/logout [post]
 func (h *AuthHandler) Logout(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "Logout")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -1762,5 +1808,191 @@ func (h *AuthHandler) Logout(ctx *gin.Context) {
 	reqLogger.Info("User logged out", map[string]interface{}{
 		"user_id":    userID,
 		"session_id": sessionID,
+	})
+}
+
+// InitiatePasswordReset handles the forgot password request
+// @Summary Initiate password reset
+// @Description Send OTP to email for password reset (email accounts only)
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body request.ForgotPasswordRequest true "Email for password reset"
+// @Success 200 {object} response.SuccessResponse "Password reset email sent"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 403 {object} response.ErrorResponse "OAuth accounts must use provider"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/forgot-password [post]
+func (h *AuthHandler) InitiatePasswordReset(ctx *gin.Context) {
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing password reset request")
+
+	var req request.ForgotPasswordRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	err := h.authService.InitiatePasswordReset(ctx, req.Email)
+	if err != nil {
+		if err.Error() == "password reset not available for OAuth accounts" {
+			reqLogger.Info("Password reset attempted for OAuth account", map[string]interface{}{
+				"email": req.Email,
+			})
+			ctx.JSON(http.StatusForbidden, response.ErrorResponse{
+				Success: false,
+				Message: "Password reset is not available for OAuth accounts. Please use your social login provider to reset your password.",
+			})
+			return
+		}
+		reqLogger.Error("Password reset initiation failed", err, map[string]interface{}{
+			"email": req.Email,
+		})
+		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+			Success: false,
+			Message: "Failed to process password reset request",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "If this email exists, you will receive password reset instructions",
+	})
+
+	reqLogger.Info("Password reset initiated", map[string]interface{}{
+		"email": req.Email,
+	})
+}
+
+// VerifyResetOTP handles OTP verification for password reset
+// @Summary Verify password reset OTP
+// @Description Verify OTP for password reset (does not invalidate OTP)
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body request.VerifyResetOTPRequest true "Email and OTP"
+// @Success 200 {object} response.SuccessResponse "OTP verified successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid OTP"
+// @Failure 429 {object} response.ErrorResponse "Too many attempts"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/verify-reset-otp [post]
+func (h *AuthHandler) VerifyResetOTP(ctx *gin.Context) {
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing OTP verification request")
+
+	var req request.VerifyResetOTPRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	err := h.authService.VerifyResetOTP(ctx, req.Email, req.OTP)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "maximum attempts exceeded" {
+			status = http.StatusTooManyRequests
+		}
+		reqLogger.Error("OTP verification failed", err, map[string]interface{}{
+			"email": req.Email,
+		})
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "OTP verified successfully",
+	})
+
+	reqLogger.Info("OTP verified successfully", map[string]interface{}{
+		"email": req.Email,
+	})
+}
+
+// ResetPassword handles the actual password reset
+// @Summary Reset password
+// @Description Reset password using email, OTP, and new password
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param request body request.CompletePasswordResetRequest true "Password reset details"
+// @Success 200 {object} response.SuccessResponse "Password reset successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request or password"
+// @Failure 401 {object} response.ErrorResponse "Invalid OTP"
+// @Failure 429 {object} response.ErrorResponse "Too many attempts"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /auth/reset-password [post]
+func (h *AuthHandler) ResetPassword(ctx *gin.Context) {
+	requestID, _ := ctx.Get("RequestID")
+	reqLogger := h.logger.With("request_id", requestID)
+	reqLogger.Debug("Processing password reset request")
+
+	var req request.CompletePasswordResetRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		reqLogger.Error("Invalid request format", err, map[string]interface{}{
+			"error": err.Error(),
+		})
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Invalid request format: " + err.Error(),
+		})
+		return
+	}
+
+	err := h.authService.ResetPassword(ctx, req.Email, req.OTP, req.NewPassword)
+	if err != nil {
+		status := http.StatusBadRequest
+		message := err.Error()
+
+		switch {
+		case strings.Contains(message, "OTP has expired"):
+			status = http.StatusUnauthorized
+		case strings.Contains(message, "maximum attempts exceeded"):
+			status = http.StatusTooManyRequests
+		case strings.Contains(message, "invalid OTP"):
+			status = http.StatusUnauthorized
+		case strings.Contains(message, "password must be"):
+			status = http.StatusBadRequest
+		default:
+			status = http.StatusInternalServerError
+			message = "Failed to reset password"
+		}
+
+		reqLogger.Error("Password reset failed", err, map[string]interface{}{
+			"email": req.Email,
+		})
+
+		ctx.JSON(status, response.ErrorResponse{
+			Success: false,
+			Message: message,
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response.SuccessResponse{
+		Success: true,
+		Message: "Password reset successful. Please login with your new password.",
+	})
+
+	reqLogger.Info("Password reset successful", map[string]interface{}{
+		"email": req.Email,
 	})
 }

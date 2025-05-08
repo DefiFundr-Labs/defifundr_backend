@@ -13,6 +13,7 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	"github.com/demola234/defifundr/internal/core/domain"
+	"github.com/demola234/defifundr/pkg/tracing"
 	jwtv4 "github.com/golang-jwt/jwt/v4"
 )
 
@@ -81,6 +82,8 @@ func (r *OAuthRepository) getJWKS(jwksURL string) (*keyfunc.JWKS, error) {
 
 // ValidateWebAuthToken validates a Web3Auth token
 func (r *OAuthRepository) ValidateWebAuthToken(ctx context.Context, tokenString string) (*domain.Web3AuthClaims, error) {
+	_, span := tracing.Tracer("oauth-repository").Start(ctx, "ValidateWebAuthToken")
+	defer span.End()
 	jwksURL := "https://api-auth.web3auth.io/jwks"
 	jwks, err := r.getJWKS(jwksURL)
 	if err != nil {
@@ -125,6 +128,8 @@ func (r *OAuthRepository) ValidateWebAuthToken(ctx context.Context, tokenString 
 
 // GetUserInfoFromProviderToken extracts user information from an OAuth provider token
 func (r *OAuthRepository) GetUserInfoFromProviderToken(ctx context.Context, provider string, token string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("oauth-repository").Start(ctx, "GetUserInfoFromProviderToken")
+	defer span.End()
 	// For Web3Auth, validate token first
 	if provider == string(domain.Web3AuthProvider) {
 		claims, err := r.ValidateWebAuthToken(ctx, token)

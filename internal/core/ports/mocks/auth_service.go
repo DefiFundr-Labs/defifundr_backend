@@ -221,18 +221,18 @@ type FakeAuthService struct {
 		result1 *domain.User
 		result2 error
 	}
-	RegisterBusinessDetailsStub        func(context.Context, domain.User) (*domain.User, error)
+	RegisterBusinessDetailsStub        func(context.Context, domain.CompanyInfo) (*domain.CompanyInfo, error)
 	registerBusinessDetailsMutex       sync.RWMutex
 	registerBusinessDetailsArgsForCall []struct {
 		arg1 context.Context
-		arg2 domain.User
+		arg2 domain.CompanyInfo
 	}
 	registerBusinessDetailsReturns struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}
 	registerBusinessDetailsReturnsOnCall map[int]struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}
 	RegisterPersonalDetailsStub        func(context.Context, domain.User) (*domain.User, error)
@@ -1233,12 +1233,12 @@ func (fake *FakeAuthService) RegisterAddressDetailsReturnsOnCall(i int, result1 
 	}{result1, result2}
 }
 
-func (fake *FakeAuthService) RegisterBusinessDetails(arg1 context.Context, arg2 domain.User) (*domain.User, error) {
+func (fake *FakeAuthService) RegisterBusinessDetails(arg1 context.Context, arg2 domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	fake.registerBusinessDetailsMutex.Lock()
 	ret, specificReturn := fake.registerBusinessDetailsReturnsOnCall[len(fake.registerBusinessDetailsArgsForCall)]
 	fake.registerBusinessDetailsArgsForCall = append(fake.registerBusinessDetailsArgsForCall, struct {
 		arg1 context.Context
-		arg2 domain.User
+		arg2 domain.CompanyInfo
 	}{arg1, arg2})
 	stub := fake.RegisterBusinessDetailsStub
 	fakeReturns := fake.registerBusinessDetailsReturns
@@ -1259,41 +1259,41 @@ func (fake *FakeAuthService) RegisterBusinessDetailsCallCount() int {
 	return len(fake.registerBusinessDetailsArgsForCall)
 }
 
-func (fake *FakeAuthService) RegisterBusinessDetailsCalls(stub func(context.Context, domain.User) (*domain.User, error)) {
+func (fake *FakeAuthService) RegisterBusinessDetailsCalls(stub func(context.Context, domain.CompanyInfo) (*domain.CompanyInfo, error)) {
 	fake.registerBusinessDetailsMutex.Lock()
 	defer fake.registerBusinessDetailsMutex.Unlock()
 	fake.RegisterBusinessDetailsStub = stub
 }
 
-func (fake *FakeAuthService) RegisterBusinessDetailsArgsForCall(i int) (context.Context, domain.User) {
+func (fake *FakeAuthService) RegisterBusinessDetailsArgsForCall(i int) (context.Context, domain.CompanyInfo) {
 	fake.registerBusinessDetailsMutex.RLock()
 	defer fake.registerBusinessDetailsMutex.RUnlock()
 	argsForCall := fake.registerBusinessDetailsArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeAuthService) RegisterBusinessDetailsReturns(result1 *domain.User, result2 error) {
+func (fake *FakeAuthService) RegisterBusinessDetailsReturns(result1 *domain.CompanyInfo, result2 error) {
 	fake.registerBusinessDetailsMutex.Lock()
 	defer fake.registerBusinessDetailsMutex.Unlock()
 	fake.RegisterBusinessDetailsStub = nil
 	fake.registerBusinessDetailsReturns = struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeAuthService) RegisterBusinessDetailsReturnsOnCall(i int, result1 *domain.User, result2 error) {
+func (fake *FakeAuthService) RegisterBusinessDetailsReturnsOnCall(i int, result1 *domain.CompanyInfo, result2 error) {
 	fake.registerBusinessDetailsMutex.Lock()
 	defer fake.registerBusinessDetailsMutex.Unlock()
 	fake.RegisterBusinessDetailsStub = nil
 	if fake.registerBusinessDetailsReturnsOnCall == nil {
 		fake.registerBusinessDetailsReturnsOnCall = make(map[int]struct {
-			result1 *domain.User
+			result1 *domain.CompanyInfo
 			result2 error
 		})
 	}
 	fake.registerBusinessDetailsReturnsOnCall[i] = struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}{result1, result2}
 }

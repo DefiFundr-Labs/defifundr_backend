@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/demola234/defifundr/pkg/tracing"
+
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
-	"github.com/demola234/defifundr/pkg/app_errors"
+	appErrors "github.com/demola234/defifundr/pkg/app_errors"
 	"github.com/demola234/defifundr/pkg/random"
 	"github.com/google/uuid"
 )
@@ -29,10 +31,14 @@ func NewWaitlistService(waitlistRepo ports.WaitlistRepository, emailService port
 
 // JoinWaitlist implements ports.WaitlistService
 func (s *waitlistService) JoinWaitlist(ctx context.Context, email, fullName, referralSource string) (*domain.WaitlistEntry, error) {
+	ctx, span := tracing.Tracer("waitlist-service").Start(ctx, "JoinWaitlist")
+	defer span.End()
 	// Check if email is already on waitlist
 	existingEntry, err := s.waitlistRepo.GetWaitlistEntryByEmail(ctx, email)
 	if err == nil && existingEntry != nil {
-		return nil, appErrors.NewConflictError("Email already on waitlist")
+		conflictErr := appErrors.NewConflictError("Email already on waitlist")
+		span.RecordError(conflictErr)
+		return nil, conflictErr
 	}
 	// Generate a unique referral code
 	referralCode := generateReferralCode(fullName)
@@ -74,15 +80,19 @@ func (s *waitlistService) JoinWaitlist(ctx context.Context, email, fullName, ref
 
 // GetWaitlistPosition implements ports.WaitlistService
 func (s *waitlistService) GetWaitlistPosition(ctx context.Context, id uuid.UUID) (int, error) {
+	ctx, span := tracing.Tracer("waitlist-service").Start(ctx, "GetWaitlistPosition")
+	defer span.End()
 	// Get the entry to check its signup date
 	_, err := s.waitlistRepo.GetWaitlistEntryByID(ctx, id)
 	if err != nil {
+		span.RecordError(err)
 		return 0, err
 	}
 
 	// Get all waiting entries sorted by signup date
 	entries, _, err := s.waitlistRepo.ListWaitlistEntries(ctx, 1000000, 0, map[string]string{"status": "waiting"})
 	if err != nil {
+		span.RecordError(err)
 		return 0, err
 	}
 
@@ -93,25 +103,31 @@ func (s *waitlistService) GetWaitlistPosition(ctx context.Context, id uuid.UUID)
 		}
 	}
 
-	return 0, appErrors.NewNotFoundError("Entry not found in waitlist")
+	notFoundErr := appErrors.NewNotFoundError("Entry not found in waitlist")
+	span.RecordError(notFoundErr)
+	return 0, notFoundErr
 }
-
 
 // GetWaitlistStats implements ports.WaitlistService
 func (s *waitlistService) GetWaitlistStats(ctx context.Context) (map[string]interface{}, error) {
+	ctx, span := tracing.Tracer("waitlist-service").Start(ctx, "GetWaitlistStats")
+	defer span.End()
 	// Get waitlist entries for different statuses
 	waiting, _, err := s.waitlistRepo.ListWaitlistEntries(ctx, 1000000, 0, map[string]string{"status": "waiting"})
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
 	invited, _, err := s.waitlistRepo.ListWaitlistEntries(ctx, 1000000, 0, map[string]string{"status": "invited"})
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
 	registered, _, err := s.waitlistRepo.ListWaitlistEntries(ctx, 1000000, 0, map[string]string{"status": "registered"})
 	if err != nil {
+		span.RecordError(err)
 		return nil, err
 	}
 
@@ -138,20 +154,38 @@ func (s *waitlistService) GetWaitlistStats(ctx context.Context) (map[string]inte
 
 // ListWaitlist implements ports.WaitlistService
 func (s *waitlistService) ListWaitlist(ctx context.Context, page, pageSize int, filters map[string]string) ([]domain.WaitlistEntry, int64, error) {
+	ctx, span := tracing.Tracer("waitlist-service").Start(ctx, "ListWaitlist")
+	defer span.End()
 	offset := (page - 1) * pageSize
-	return s.waitlistRepo.ListWaitlistEntries(ctx, pageSize, offset, filters)
+	entries, total, err := s.waitlistRepo.ListWaitlistEntries(ctx, pageSize, offset, filters)
+	if err != nil {
+		span.RecordError(err)
+		return nil, 0, err
+	}
+	return entries, total, nil
 }
 
 // ExportWaitlist implements ports.WaitlistService
 func (s *waitlistService) ExportWaitlist(ctx context.Context) ([]byte, error) {
-	return s.waitlistRepo.ExportWaitlistToCsv(ctx)
+	ctx, span := tracing.Tracer("waitlist-service").Start(ctx, "ExportWaitlist")
+	defer span.End()
+	csv, err := s.waitlistRepo.ExportWaitlistToCsv(ctx)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+	return csv, nil
 }
 
 // GetWaitlistEntryByID gets a waitlist entry by ID
 func (s *waitlistService) GetWaitlistEntryByID(ctx context.Context, id uuid.UUID) (*domain.WaitlistEntry, error) {
+	ctx, span := tracing.Tracer("waitlist-service").Start(ctx, "GetWaitlistEntryByID")
+	defer span.End()
 	entry, err := s.waitlistRepo.GetWaitlistEntryByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("Waitlist entry not found")
+		notFoundErr := appErrors.NewNotFoundError("Waitlist entry not found")
+		span.RecordError(notFoundErr)
+		return nil, notFoundErr
 	}
 	return entry, nil
 }
@@ -175,7 +209,7 @@ func generateReferralCode(name string) string {
 			prefix = strings.ToUpper(firstPart)
 		}
 	}
-	
+
 	// Add random characters to make it unique
 	suffix := random.RandomString(5)
 	return fmt.Sprintf("%s%s", prefix, suffix)

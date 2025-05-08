@@ -16,12 +16,17 @@ import (
 	"github.com/demola234/defifundr/internal/adapters/routers"
 	"github.com/demola234/defifundr/internal/core/services"
 	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // @title DefiFundr API
@@ -41,6 +46,16 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and the JWT token.
 
+var (
+	apiRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "api_requests_total",
+			Help: "Total number of API requests received.",
+		},
+		[]string{"path", "method"},
+	)
+)
+
 func main() {
 	// Load configuration
 	configs, err := config.LoadConfig(".")
@@ -52,6 +67,9 @@ func main() {
 	logger.Info("Starting application", map[string]interface{}{
 		"environment": configs.Environment,
 	})
+
+	// Register Prometheus metrics
+	prometheus.MustRegister(apiRequests)
 
 	// Connect using pgx
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -77,6 +95,7 @@ func main() {
 	waitlistRepo := repositories.NewWaitlistRepository(*dbQueries)
 	walletRepo := repositories.NewWalletRepository(*dbQueries)
 	securityRepo := repositories.NewSecurityRepository(*dbQueries)
+	otpRepo := repositories.NewOtpRepository(*dbQueries)
 
 	tokenMaker, err := tokenMaker.NewTokenMaker(configs.TokenSymmetricKey)
 	if err != nil {
@@ -109,9 +128,10 @@ func main() {
 	// Create email service using the email sender
 	emailService := services.NewEmailService(configs, logger, emailSender)
 
-	// Create services
-	authService := services.NewAuthService(userRepo, sessionRepo, oAuthRepo, walletRepo, securityRepo, emailService, tokenMaker, configs, logger)
 	userService := services.NewUserService(userRepo)
+
+	// Create services
+	authService := services.NewAuthService(userRepo, sessionRepo, oAuthRepo, walletRepo, securityRepo, emailService, tokenMaker, configs, logger, otpRepo, userService)
 	waitlistService := services.NewWaitlistService(waitlistRepo, emailService)
 
 	// Create handlers
@@ -119,12 +139,34 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 	waitlistHandler := handlers.NewWaitlistHandler(waitlistService, logger)
 
+	// Initialize OpenTelemetry
+	tracingCfg := tracing.Config{
+		ServiceName:       "defifundr-api",
+		ServiceVersion:    "0.1.0",
+		Environment:       configs.Environment,
+		UseStdoutExporter: configs.Environment != "production", // Use stdout in dev
+	}
+
+	// Set up OpenTelemetry
+	otelShutdown, err := tracing.SetupOTel(context.Background(), tracingCfg)
+	if err != nil {
+		logger.Fatal("Failed to set up OpenTelemetry", err, map[string]interface{}{
+			"service": tracingCfg.ServiceName,
+		})
+	}
+	defer func() {
+		if err := otelShutdown(context.Background()); err != nil {
+			logger.Error("Failed to shutdown OpenTelemetry", err, nil)
+		}
+	}()
+
 	// Initialize the router
 	router := gin.New()
 
 	// Apply our custom logging middleware
 	router.Use(middleware.LoggingMiddleware(logger, &configs))
 	router.Use(gin.Recovery())
+	router.Use(otelgin.Middleware("defifundr-api"))
 
 	// Configure CORS to allow all origins
 	router.Use(cors.New(cors.Config{
@@ -161,6 +203,9 @@ func main() {
 
 	// Setup Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// Prometheus /metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Start the HTTP server
 	logger.Info("HTTP server is running on", map[string]interface{}{

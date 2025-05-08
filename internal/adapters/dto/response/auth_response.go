@@ -140,6 +140,7 @@ type UserResponse struct {
 	DeletedAt  *time.Time `json:"deleted_at,omitempty"`
 }
 
+
 // LoginResponse represents the login response
 type LoginResponse struct {
 	User          LoginUserResponse `json:"user"`

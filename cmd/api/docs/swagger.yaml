@@ -11,6 +11,27 @@ definitions:
     - current_password
     - new_password
     type: object
+  request.CompletePasswordResetRequest:
+    properties:
+      email:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+      otp:
+        type: string
+    required:
+    - email
+    - new_password
+    - otp
+    type: object
+  request.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
   request.LoginRequest:
     properties:
       email:
@@ -57,24 +78,24 @@ definitions:
     type: object
   request.RegisterBusinessDetailsRequest:
     properties:
-      company_address:
+      account_type:
         type: string
-      company_city:
+      company_address:
         type: string
       company_country:
         type: string
+      company_description:
+        type: string
+      company_industry:
+        type: string
       company_name:
         type: string
-      company_postal_code:
-        type: string
-      company_website:
-        type: string
-      employment_type:
+      company_size:
         type: string
     required:
     - company_address
-    - company_city
     - company_country
+    - company_description
     - company_name
     type: object
   request.RegisterUserRequest:
@@ -133,6 +154,16 @@ definitions:
         type: string
     required:
     - code
+    type: object
+  request.VerifyResetOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    required:
+    - email
+    - otp
     type: object
   request.WaitlistJoinRequest:
     properties:
@@ -352,6 +383,40 @@ paths:
       summary: Get waitlist statistics
       tags:
       - waitlist
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Send OTP to email for password reset (email accounts only)
+      parameters:
+      - description: Email for password reset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset email sent
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: OAuth accounts must use provider
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Initiate password reset
+      tags:
+      - authentication
   /auth/login:
     post:
       consumes:
@@ -589,6 +654,44 @@ paths:
       summary: Register a new user
       tags:
       - authentication
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset password using email, OTP, and new password
+      parameters:
+      - description: Password reset details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.CompletePasswordResetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request or password
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid OTP
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "429":
+          description: Too many attempts
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Reset password
+      tags:
+      - authentication
   /auth/security/devices:
     get:
       description: Retrieve all active devices/sessions for the authenticated user
@@ -751,6 +854,40 @@ paths:
       summary: Verify MFA
       tags:
       - security
+  /auth/verify-reset-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verify OTP for password reset (does not invalidate OTP)
+      parameters:
+      - description: Email and OTP
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/request.VerifyResetOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OTP verified successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid OTP
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "429":
+          description: Too many attempts
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Verify password reset OTP
+      tags:
+      - authentication
   /auth/wallet:
     get:
       description: Retrieve all blockchain wallets linked to the authenticated user

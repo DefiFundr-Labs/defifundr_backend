@@ -28,6 +28,11 @@ func RegisterAuthRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, t
         authRoutes.POST("/register", authHandler.RegisterUser)
         authRoutes.POST("/login", authHandler.Login)
         authRoutes.POST("/refresh", authHandler.RefreshToken)
+
+        // Forgot password
+        authRoutes.POST("/forgot-password", authHandler.InitiatePasswordReset)
+        authRoutes.POST("/verify-reset-otp", authHandler.VerifyResetOTP)
+        authRoutes.POST("/reset-password", authHandler.ResetPassword)
     }
 
     // Authenticated routes
@@ -57,6 +62,7 @@ func RegisterAuthRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, t
 
         // Session management
         authenticatedRoutes.POST("/logout", authHandler.Logout)
+
     }
 
     // High-security routes requiring MFA
