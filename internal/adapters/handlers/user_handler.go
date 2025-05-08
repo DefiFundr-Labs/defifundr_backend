@@ -177,7 +177,6 @@ func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
 		Gender:              &req.Gender,
 		ResidentialCountry:  &req.ResidentialCountry,
 		JobRole:             &req.JobRole,
-		CompanyWebsite:      &req.CompanyWebsite,
 		EmploymentType:      &req.EmploymentType,
 	}
 

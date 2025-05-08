@@ -31,6 +31,10 @@ func (r *OTPRepository) CreateOTP(ctx context.Context, otp domain.OTPVerificatio
 		UserID:    pgtype.UUID{Bytes: otp.UserID, Valid: true},
 		OtpCode:   otp.OTPCode,
 		HashedOtp: hashedOtp,
+		Purpose: db.OtpPurpose(otp.Purpose),
+		ExpiresAt: otp.ExpiresAt,
+		AttemptsMade: 0,
+		MaxAttempts:  3,
 	})
 
 	if err != nil {

@@ -17,6 +17,7 @@ import (
 	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
 	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
+	random "github.com/demola234/defifundr/pkg/random"
 )
 
 type authService struct {
@@ -29,6 +30,8 @@ type authService struct {
 	tokenMaker   tokenMaker.Maker
 	config       config.Config
 	logger       logging.Logger
+	otpRepo      ports.OTPRepository
+	userService  ports.UserService 
 }
 
 // SetupMFA sets up multi-factor authentication for a user
@@ -99,6 +102,8 @@ func NewAuthService(
 	tokenMaker tokenMaker.Maker,
 	config config.Config,
 	logger logging.Logger,
+	otpRepo ports.OTPRepository,
+	userService ports.UserService,
 ) ports.AuthService {
 	return &authService{
 		userRepo:     userRepo,
@@ -110,6 +115,8 @@ func NewAuthService(
 		tokenMaker:   tokenMaker,
 		config:       config,
 		logger:       logger,
+		otpRepo:      otpRepo,
+		userService:  userService,
 	}
 }
 
@@ -327,45 +334,44 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 }
 
 // RegisterBusiness implements ports.AuthService.
-func (a *authService) RegisterBusiness(ctx context.Context, user domain.User) (*domain.User, error) {
-	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterBusiness")
-	defer span.End()
+func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	// Add Users business details
 	// Update the user with business details
 	a.logger.Info("Starting user personal details update process", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": companyInfo.UserID,
 	})
 
 	// Get the existing user by ID
-	existingUser, err := a.userRepo.GetUserByID(ctx, user.ID)
+	existingCompanyInfo, err := a.userRepo.GetUserCompanyInfo(ctx, companyInfo.UserID)
 	if err != nil {
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
 	// Update only the personal details fields, keeping other fields as they are
-	updatedUser := *existingUser
+	updatedCompany := *existingCompanyInfo
 	// Update only the company details fields, keeping other fields as they are
-	updatedUser.CompanyName = user.CompanyName
-	updatedUser.CompanyAddress = user.CompanyAddress
-	updatedUser.CompanyCity = user.CompanyCity
-	updatedUser.CompanyCountry = user.CompanyCountry
-	updatedUser.CompanyPostalCode = user.CompanyPostalCode
-	updatedUser.CompanyWebsite = user.CompanyWebsite
+	updatedCompany.CompanyName = companyInfo.CompanyName
+	updatedCompany.CompanyDescription = companyInfo.CompanyDescription
+	updatedCompany.AccountType = companyInfo.AccountType
+	updatedCompany.CompanySize = companyInfo.CompanySize
+	updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
+	updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
+	updatedCompany.CompanyWebsite = companyInfo.CompanyWebsite
 
 	// Update the user in the database
-	users, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedUser)
+	company, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedCompany)
 	if err != nil {
 		a.logger.Error("Failed to update user", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
-	return users, nil
+	return company, nil
 }
 
 // RegisterPersonalDetails implements ports.AuthService
@@ -419,68 +425,60 @@ func (a *authService) RegisterPersonalDetails(ctx context.Context, user domain.U
 }
 
 // RegisterBusinessDetails implements ports.AuthService
-func (a *authService) RegisterBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error) {
-	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterBusinessDetails")
-	defer span.End()
+func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	a.logger.Info("Starting business details update process", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": companyInfo.UserID,
 	})
 
 	// Get the existing user by ID
-	existingUser, err := a.userRepo.GetUserByID(ctx, user.ID)
+	existingCompany, err := a.userRepo.GetUserCompanyInfo(ctx, companyInfo.UserID)
 	if err != nil {
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
 	// Update only the business details fields, keeping other fields as they are
-	updatedUser := *existingUser
+	updatedCompany := *existingCompany
 
-	if user.CompanyName != "" {
-		updatedUser.CompanyName = user.CompanyName
+	updatedCompany.CompanyName = companyInfo.CompanyName
+
+	if *companyInfo.CompanyDescription != "" {
+		updatedCompany.CompanyDescription = companyInfo.CompanyName
 	}
 
-	if user.CompanyAddress != "" {
-		updatedUser.CompanyAddress = user.CompanyAddress
+	if *companyInfo.CompanyHeadquarters != "" {
+		updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
 	}
 
-	if user.CompanyCity != "" {
-		updatedUser.CompanyCity = user.CompanyCity
+	if *companyInfo.CompanyIndustry != "" {
+		updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
 	}
 
-	if user.CompanyPostalCode != "" {
-		updatedUser.CompanyPostalCode = user.CompanyPostalCode
+	if *companyInfo.CompanySize != "" {
+		updatedCompany.CompanySize = companyInfo.CompanySize
 	}
 
-	if user.CompanyCountry != "" {
-		updatedUser.CompanyCountry = user.CompanyCountry
-	}
-
-	if user.CompanyWebsite != nil {
-		updatedUser.CompanyWebsite = user.CompanyWebsite
-	}
-
-	if user.EmploymentType != nil {
-		updatedUser.EmploymentType = user.EmploymentType
+	if companyInfo.AccountType != "" {
+		updatedCompany.AccountType = companyInfo.AccountType
 	}
 
 	// Update the user with business details
-	result, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedUser)
+	businessResult, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedCompany)
 	if err != nil {
 		a.logger.Error("Failed to update business details", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": companyInfo.UserID,
 		})
 		return nil, fmt.Errorf("failed to update business details: %w", err)
 	}
 
 	a.logger.Info("Business details updated successfully", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": companyInfo.UserID,
 	})
 
-	return result, nil
+	return businessResult, nil
 }
 
 // RegisterAddressDetails implements ports.AuthService
@@ -769,6 +767,7 @@ func (a *authService) GetUserWallets(ctx context.Context, userID uuid.UUID) ([]d
 func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uuid.UUID) (*domain.ProfileCompletion, error) {
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "GetProfileCompletionStatus")
 	defer span.End()
+
 	// Get user data
 	user, err := a.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
@@ -790,20 +789,11 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 	}
 
 	// Account type specific fields
-	if user.AccountType == "business" {
-		fields = append(fields, []fieldCheck{
-			{"Company Name", true, user.CompanyName != ""},
-			{"Company Address", true, user.CompanyAddress != ""},
-			{"Company City", true, user.CompanyCity != ""},
-			{"Company Country", true, user.CompanyCountry != ""},
-		}...)
-	} else {
-		fields = append(fields, []fieldCheck{
-			{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
-			{"City", true, user.City != ""},
-			{"Postal Code", true, user.PostalCode != ""},
-		}...)
-	}
+	fields = append(fields, []fieldCheck{
+		{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
+		{"City", true, user.City != ""},
+		{"Postal Code", true, user.PostalCode != ""},
+	}...)
 
 	// Calculate completion percentage
 	var completedFields, requiredFields int
@@ -1310,4 +1300,161 @@ func isValidWalletAddress(address string) bool {
 	}
 
 	return true
+}
+// InitiatePasswordReset starts the password reset process for email-based accounts
+func (a *authService) InitiatePasswordReset(ctx context.Context, email string) error {
+	// Check if email exists and is email-based account
+	user, err := a.userRepo.GetUserByEmail(ctx, email)
+	if err != nil {
+		// Return generic message for security - don't reveal if email exists
+		a.logger.Info("Password reset requested", map[string]interface{}{
+			"email": email,
+		})
+		return nil
+	}
+
+	// Check if account was created with email/password
+	if user.AuthProvider != "email" {
+		a.logger.Info("Password reset attempted for OAuth account", map[string]interface{}{
+			"email": email,
+			"provider": user.AuthProvider,
+		})
+		// Return nil instead of error for security - don't reveal details
+		return nil
+	}
+
+	// Generate OTP
+	otpCode := random.RandomOtp()
+	otp := domain.OTPVerification{
+		ID:           uuid.New(),
+		UserID:       user.ID,
+		Purpose:      domain.OTPPurposePasswordReset,
+		OTPCode:      otpCode,
+		ExpiresAt:    time.Now().Add(15 * time.Minute),
+
+	}
+
+	// Store OTP
+	_, err = a.otpRepo.CreateOTP(ctx, otp)
+	if err != nil {
+		a.logger.Error("Failed to create OTP", err, map[string]interface{}{
+			"email": email,
+		})
+		return nil // Don't reveal internal errors
+	}
+
+	// Send password reset email
+	err = a.emailService.SendPasswordResetEmail(ctx, email, user.FirstName, otp.OTPCode)
+	if err != nil {
+		a.logger.Error("Failed to send password reset email", err, map[string]interface{}{
+			"email": email,
+		})
+		// Email failure shouldn't be exposed to the user
+		return nil
+	}
+
+	// Log security event
+	a.LogSecurityEvent(ctx, "password_reset_initiated", user.ID, map[string]interface{}{
+		"email": email,
+	})
+
+	return nil
+}
+
+// VerifyResetOTP verifies the OTP but doesn't invalidate it
+func (a *authService) VerifyResetOTP(ctx context.Context, email string, code string) error {
+	user, err := a.userRepo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return errors.New("invalid email or OTP")
+	}
+
+	// Get OTP
+	otp, err := a.otpRepo.GetOTPByUserIDAndPurpose(ctx, user.ID, domain.OTPPurposePasswordReset)
+	if err != nil {
+		return errors.New("invalid or expired OTP")
+	}
+
+	// Check if OTP is expired
+	if time.Now().After(otp.ExpiresAt) {
+		return errors.New("OTP has expired")
+	}
+
+	// Check attempts
+	if otp.AttemptsMade >= otp.MaxAttempts {
+		return errors.New("maximum attempts exceeded")
+	}
+
+	// Verify code - just check if it's correct without invalidating
+	if otp.OTPCode != code {
+		// Increment attempts on failure
+		a.otpRepo.IncrementAttempts(ctx, otp.ID)
+		return errors.New("invalid OTP")
+	}
+
+	// Log security event for verification success
+	a.LogSecurityEvent(ctx, "password_reset_otp_verified", user.ID, map[string]interface{}{
+		"email": email,
+	})
+
+	return nil
+}
+
+// ResetPassword verifies OTP and resets the user's password in one step
+func (a *authService) ResetPassword(ctx context.Context, email string, code string, newPassword string) error {
+	user, err := a.userRepo.GetUserByEmail(ctx, email)
+	if err != nil {
+		return errors.New("invalid email")
+	}
+
+	// Get OTP
+	otp, err := a.otpRepo.GetOTPByUserIDAndPurpose(ctx, user.ID, domain.OTPPurposePasswordReset)
+	if err != nil {
+		return errors.New("invalid or expired OTP")
+	}
+
+	// Check if OTP is expired
+	if time.Now().After(otp.ExpiresAt) {
+		return errors.New("OTP has expired")
+	}
+
+	// Check attempts
+	if otp.AttemptsMade >= otp.MaxAttempts {
+		return errors.New("maximum attempts exceeded")
+	}
+
+	// Verify code
+	if otp.OTPCode != code {
+		// Increment attempts on failure
+		a.otpRepo.IncrementAttempts(ctx, otp.ID)
+		return errors.New("invalid OTP")
+	}
+
+	// Now proceed with password reset
+	err = a.userService.ResetUserPassword(ctx, user.ID, newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to reset password: %w", err)
+	}
+
+	// Invalidate the OTP after successful password reset
+	err = a.otpRepo.VerifyOTP(ctx, otp.ID, code)
+	if err != nil {
+		a.logger.Error("Failed to invalidate OTP after password reset", err, map[string]interface{}{
+			"otp_id": otp.ID,
+		})
+	}
+
+	// Block all user sessions
+	err = a.sessionRepo.BlockAllUserSessions(ctx, user.ID)
+	if err != nil {
+		a.logger.Error("Failed to block user sessions after password reset", err, map[string]interface{}{
+			"user_id": user.ID,
+		})
+	}
+
+	// Log security event
+	a.LogSecurityEvent(ctx, "password_reset_completed", user.ID, map[string]interface{}{
+		"email": user.Email,
+	})
+
+	return nil
 }

@@ -122,3 +122,31 @@ func validatePassword(password string) error {
 
 	return nil
 }
+
+// ResetUserPassword updates password without requiring old password (for password reset flow)
+func (u *userService) ResetUserPassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
+	// Get the user to verify it exists
+	_, err := u.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user with ID %s: %w", userID, err)
+	}
+
+	// Validate new password
+	if err := validatePassword(newPassword); err != nil {
+		return err
+	}
+
+	// Hash the new password
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	// Update the password
+	err = u.userRepo.UpdatePassword(ctx, userID, hashedPassword)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}

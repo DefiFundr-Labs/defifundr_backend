@@ -19,7 +19,7 @@ type AuthService interface {
 	// User profile completion
 	RegisterPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error)
 	RegisterAddressDetails(ctx context.Context, user domain.User) (*domain.User, error)
-	RegisterBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error)
+	RegisterBusinessDetails(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error)
 	GetProfileCompletionStatus(ctx context.Context, userID uuid.UUID) (*domain.ProfileCompletion, error)
 
 	// Multi-factor authentication
@@ -44,6 +44,11 @@ type AuthService interface {
 
 	// Security
 	LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]interface{}) error
+
+	// Forgot password
+	InitiatePasswordReset(ctx context.Context, email string) error
+	VerifyResetOTP(ctx context.Context, email string, otp string) error  // Just verify, don't invalidate
+	ResetPassword(ctx context.Context, email string, otp string, newPassword string) error  // Verify OTP and reset password
 }
 
 // UserService defines the use cases for user operations
@@ -52,6 +57,7 @@ type UserService interface {
 	UpdateUser(ctx context.Context, user domain.User) (*domain.User, error)
 	UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error
 	UpdateKYC(ctx context.Context, kyc domain.KYC) error
+	ResetUserPassword(ctx context.Context, userID uuid.UUID, newPassword string) error
 }
 
 // WaitlistService defines the use cases for the waitlist feature
@@ -75,6 +81,7 @@ type EmailSender interface {
 // EmailService defines methods for sending application emails
 type EmailService interface {
 	SendWaitlistConfirmation(ctx context.Context, email, name, referralCode string, position int) error
+	SendPasswordResetEmail(ctx context.Context, email, name, otpCode string) error
 	SendWaitlistInvitation(ctx context.Context, email, name string, inviteLink string) error
 	SendBatchUpdate(ctx context.Context, emails []string, subject, message string) error
 }

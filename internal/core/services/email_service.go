@@ -108,6 +108,38 @@ func (s *EmailService) SendWaitlistInvitation(ctx context.Context, email, name s
 	return nil
 }
 
+// SendPasswordResetEmail sends a password reset OTP email
+func (s *EmailService) SendPasswordResetEmail(ctx context.Context, email, name, otpCode string) error {
+	if s.isTestMode() {
+		s.logger.Info("Test mode: Would send password reset email")
+		return nil
+	}
+
+	subject := "DefiFundr - Password Reset Request"
+
+	// Create email template data
+	templateData := map[string]interface{}{
+		"Name":     name,
+		"OTPCode":  otpCode,
+		"AppName":  "DefiFundr",
+		"ExpiryTime": "15 minutes",
+	}
+
+	// Queue email with high priority
+	_, err := s.emailSender.QueueEmail(ctx, email, subject, "password_reset", templateData, emailEnums.HighPriority)
+	if err != nil {
+		s.logger.Error("Failed to queue password reset email", err, map[string]interface{}{
+			"email": email,
+		})
+		return fmt.Errorf("failed to queue password reset email: %w", err)
+	}
+
+	s.logger.Info("Queued password reset email", map[string]interface{}{
+		"email": email,
+	})
+	return nil
+}
+
 // SendBatchUpdate sends a batch update email to multiple waitlist members
 func (s *EmailService) SendBatchUpdate(ctx context.Context, emails []string, subject, message string) error {
 	ctx, span := tracing.Tracer("email-service").Start(ctx, "SendBatchUpdate")

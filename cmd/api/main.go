@@ -79,6 +79,7 @@ func main() {
 	waitlistRepo := repositories.NewWaitlistRepository(*dbQueries)
 	walletRepo := repositories.NewWalletRepository(*dbQueries)
 	securityRepo := repositories.NewSecurityRepository(*dbQueries)
+	otpRepo := repositories.NewOtpRepository(*dbQueries)
 
 	tokenMaker, err := tokenMaker.NewTokenMaker(configs.TokenSymmetricKey)
 	if err != nil {
@@ -111,9 +112,10 @@ func main() {
 	// Create email service using the email sender
 	emailService := services.NewEmailService(configs, logger, emailSender)
 
-	// Create services
-	authService := services.NewAuthService(userRepo, sessionRepo, oAuthRepo, walletRepo, securityRepo, emailService, tokenMaker, configs, logger)
 	userService := services.NewUserService(userRepo)
+
+	// Create services
+	authService := services.NewAuthService(userRepo, sessionRepo, oAuthRepo, walletRepo, securityRepo, emailService, tokenMaker, configs, logger, otpRepo, userService)
 	waitlistService := services.NewWaitlistService(waitlistRepo, emailService)
 
 	// Create handlers
