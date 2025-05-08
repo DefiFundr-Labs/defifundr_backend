@@ -105,6 +105,20 @@ type FakeUserRepository struct {
 		result1 *domain.User
 		result2 error
 	}
+	GetUserCompanyInfoStub        func(context.Context, uuid.UUID) (*domain.CompanyInfo, error)
+	getUserCompanyInfoMutex       sync.RWMutex
+	getUserCompanyInfoArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}
+	getUserCompanyInfoReturns struct {
+		result1 *domain.CompanyInfo
+		result2 error
+	}
+	getUserCompanyInfoReturnsOnCall map[int]struct {
+		result1 *domain.CompanyInfo
+		result2 error
+	}
 	SetMFASecretStub        func(context.Context, uuid.UUID, string) error
 	setMFASecretMutex       sync.RWMutex
 	setMFASecretArgsForCall []struct {
@@ -159,18 +173,18 @@ type FakeUserRepository struct {
 		result1 *domain.User
 		result2 error
 	}
-	UpdateUserBusinessDetailsStub        func(context.Context, domain.User) (*domain.User, error)
+	UpdateUserBusinessDetailsStub        func(context.Context, domain.CompanyInfo) (*domain.CompanyInfo, error)
 	updateUserBusinessDetailsMutex       sync.RWMutex
 	updateUserBusinessDetailsArgsForCall []struct {
 		arg1 context.Context
-		arg2 domain.User
+		arg2 domain.CompanyInfo
 	}
 	updateUserBusinessDetailsReturns struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}
 	updateUserBusinessDetailsReturnsOnCall map[int]struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}
 	UpdateUserPersonalDetailsStub        func(context.Context, domain.User) (*domain.User, error)
@@ -640,6 +654,71 @@ func (fake *FakeUserRepository) GetUserByIDReturnsOnCall(i int, result1 *domain.
 	}{result1, result2}
 }
 
+func (fake *FakeUserRepository) GetUserCompanyInfo(arg1 context.Context, arg2 uuid.UUID) (*domain.CompanyInfo, error) {
+	fake.getUserCompanyInfoMutex.Lock()
+	ret, specificReturn := fake.getUserCompanyInfoReturnsOnCall[len(fake.getUserCompanyInfoArgsForCall)]
+	fake.getUserCompanyInfoArgsForCall = append(fake.getUserCompanyInfoArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+	}{arg1, arg2})
+	stub := fake.GetUserCompanyInfoStub
+	fakeReturns := fake.getUserCompanyInfoReturns
+	fake.recordInvocation("GetUserCompanyInfo", []interface{}{arg1, arg2})
+	fake.getUserCompanyInfoMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1, ret.result2
+	}
+	return fakeReturns.result1, fakeReturns.result2
+}
+
+func (fake *FakeUserRepository) GetUserCompanyInfoCallCount() int {
+	fake.getUserCompanyInfoMutex.RLock()
+	defer fake.getUserCompanyInfoMutex.RUnlock()
+	return len(fake.getUserCompanyInfoArgsForCall)
+}
+
+func (fake *FakeUserRepository) GetUserCompanyInfoCalls(stub func(context.Context, uuid.UUID) (*domain.CompanyInfo, error)) {
+	fake.getUserCompanyInfoMutex.Lock()
+	defer fake.getUserCompanyInfoMutex.Unlock()
+	fake.GetUserCompanyInfoStub = stub
+}
+
+func (fake *FakeUserRepository) GetUserCompanyInfoArgsForCall(i int) (context.Context, uuid.UUID) {
+	fake.getUserCompanyInfoMutex.RLock()
+	defer fake.getUserCompanyInfoMutex.RUnlock()
+	argsForCall := fake.getUserCompanyInfoArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeUserRepository) GetUserCompanyInfoReturns(result1 *domain.CompanyInfo, result2 error) {
+	fake.getUserCompanyInfoMutex.Lock()
+	defer fake.getUserCompanyInfoMutex.Unlock()
+	fake.GetUserCompanyInfoStub = nil
+	fake.getUserCompanyInfoReturns = struct {
+		result1 *domain.CompanyInfo
+		result2 error
+	}{result1, result2}
+}
+
+func (fake *FakeUserRepository) GetUserCompanyInfoReturnsOnCall(i int, result1 *domain.CompanyInfo, result2 error) {
+	fake.getUserCompanyInfoMutex.Lock()
+	defer fake.getUserCompanyInfoMutex.Unlock()
+	fake.GetUserCompanyInfoStub = nil
+	if fake.getUserCompanyInfoReturnsOnCall == nil {
+		fake.getUserCompanyInfoReturnsOnCall = make(map[int]struct {
+			result1 *domain.CompanyInfo
+			result2 error
+		})
+	}
+	fake.getUserCompanyInfoReturnsOnCall[i] = struct {
+		result1 *domain.CompanyInfo
+		result2 error
+	}{result1, result2}
+}
+
 func (fake *FakeUserRepository) SetMFASecret(arg1 context.Context, arg2 uuid.UUID, arg3 string) error {
 	fake.setMFASecretMutex.Lock()
 	ret, specificReturn := fake.setMFASecretReturnsOnCall[len(fake.setMFASecretArgsForCall)]
@@ -896,12 +975,12 @@ func (fake *FakeUserRepository) UpdateUserAddressDetailsReturnsOnCall(i int, res
 	}{result1, result2}
 }
 
-func (fake *FakeUserRepository) UpdateUserBusinessDetails(arg1 context.Context, arg2 domain.User) (*domain.User, error) {
+func (fake *FakeUserRepository) UpdateUserBusinessDetails(arg1 context.Context, arg2 domain.CompanyInfo) (*domain.CompanyInfo, error) {
 	fake.updateUserBusinessDetailsMutex.Lock()
 	ret, specificReturn := fake.updateUserBusinessDetailsReturnsOnCall[len(fake.updateUserBusinessDetailsArgsForCall)]
 	fake.updateUserBusinessDetailsArgsForCall = append(fake.updateUserBusinessDetailsArgsForCall, struct {
 		arg1 context.Context
-		arg2 domain.User
+		arg2 domain.CompanyInfo
 	}{arg1, arg2})
 	stub := fake.UpdateUserBusinessDetailsStub
 	fakeReturns := fake.updateUserBusinessDetailsReturns
@@ -922,41 +1001,41 @@ func (fake *FakeUserRepository) UpdateUserBusinessDetailsCallCount() int {
 	return len(fake.updateUserBusinessDetailsArgsForCall)
 }
 
-func (fake *FakeUserRepository) UpdateUserBusinessDetailsCalls(stub func(context.Context, domain.User) (*domain.User, error)) {
+func (fake *FakeUserRepository) UpdateUserBusinessDetailsCalls(stub func(context.Context, domain.CompanyInfo) (*domain.CompanyInfo, error)) {
 	fake.updateUserBusinessDetailsMutex.Lock()
 	defer fake.updateUserBusinessDetailsMutex.Unlock()
 	fake.UpdateUserBusinessDetailsStub = stub
 }
 
-func (fake *FakeUserRepository) UpdateUserBusinessDetailsArgsForCall(i int) (context.Context, domain.User) {
+func (fake *FakeUserRepository) UpdateUserBusinessDetailsArgsForCall(i int) (context.Context, domain.CompanyInfo) {
 	fake.updateUserBusinessDetailsMutex.RLock()
 	defer fake.updateUserBusinessDetailsMutex.RUnlock()
 	argsForCall := fake.updateUserBusinessDetailsArgsForCall[i]
 	return argsForCall.arg1, argsForCall.arg2
 }
 
-func (fake *FakeUserRepository) UpdateUserBusinessDetailsReturns(result1 *domain.User, result2 error) {
+func (fake *FakeUserRepository) UpdateUserBusinessDetailsReturns(result1 *domain.CompanyInfo, result2 error) {
 	fake.updateUserBusinessDetailsMutex.Lock()
 	defer fake.updateUserBusinessDetailsMutex.Unlock()
 	fake.UpdateUserBusinessDetailsStub = nil
 	fake.updateUserBusinessDetailsReturns = struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}{result1, result2}
 }
 
-func (fake *FakeUserRepository) UpdateUserBusinessDetailsReturnsOnCall(i int, result1 *domain.User, result2 error) {
+func (fake *FakeUserRepository) UpdateUserBusinessDetailsReturnsOnCall(i int, result1 *domain.CompanyInfo, result2 error) {
 	fake.updateUserBusinessDetailsMutex.Lock()
 	defer fake.updateUserBusinessDetailsMutex.Unlock()
 	fake.UpdateUserBusinessDetailsStub = nil
 	if fake.updateUserBusinessDetailsReturnsOnCall == nil {
 		fake.updateUserBusinessDetailsReturnsOnCall = make(map[int]struct {
-			result1 *domain.User
+			result1 *domain.CompanyInfo
 			result2 error
 		})
 	}
 	fake.updateUserBusinessDetailsReturnsOnCall[i] = struct {
-		result1 *domain.User
+		result1 *domain.CompanyInfo
 		result2 error
 	}{result1, result2}
 }
@@ -1043,6 +1122,8 @@ func (fake *FakeUserRepository) Invocations() map[string][][]interface{} {
 	defer fake.getUserByEmailMutex.RUnlock()
 	fake.getUserByIDMutex.RLock()
 	defer fake.getUserByIDMutex.RUnlock()
+	fake.getUserCompanyInfoMutex.RLock()
+	defer fake.getUserCompanyInfoMutex.RUnlock()
 	fake.setMFASecretMutex.RLock()
 	defer fake.setMFASecretMutex.RUnlock()
 	fake.updatePasswordMutex.RLock()

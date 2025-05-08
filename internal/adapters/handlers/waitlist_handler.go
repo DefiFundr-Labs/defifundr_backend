@@ -11,6 +11,7 @@ import (
 	"github.com/demola234/defifundr/internal/adapters/dto/response"
 	"github.com/demola234/defifundr/internal/core/ports"
 	appErrors "github.com/demola234/defifundr/pkg/app_errors"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-gonic/gin"
 )
 
@@ -40,6 +41,10 @@ func NewWaitlistHandler(waitlistService ports.WaitlistService, logger logging.Lo
 // @Failure 429 {object} response.ErrorResponse "Too many requests"
 // @Router /waitlist [post]
 func (h *WaitlistHandler) JoinWaitlist(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("waitlist-handler").Start(ctx.Request.Context(), "JoinWaitlist")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Extract request co-relation ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
@@ -133,6 +138,10 @@ func (h *WaitlistHandler) JoinWaitlist(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /admin/waitlist [get]
 func (h *WaitlistHandler) ListWaitlist(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("waitlist-handler").Start(ctx.Request.Context(), "ListWaitlist")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Check if user is admin (assuming auth middleware has set role)
 	role, exists := ctx.Get("user_role")
 	if !exists || role != "admin" {
@@ -230,6 +239,10 @@ func (h *WaitlistHandler) ListWaitlist(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /admin/waitlist/stats [get]
 func (h *WaitlistHandler) GetWaitlistStats(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("waitlist-handler").Start(ctx.Request.Context(), "GetWaitlistStats")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Check if user is admin (assuming auth middleware has set role)
 	role, exists := ctx.Get("user_role")
 	if !exists || role != "admin" {
@@ -266,6 +279,10 @@ func (h *WaitlistHandler) GetWaitlistStats(ctx *gin.Context) {
 // @Security BearerAuth
 // @Router /admin/waitlist/export [get]
 func (h *WaitlistHandler) ExportWaitlist(ctx *gin.Context) {
+	spanCtx, span := tracing.Tracer("waitlist-handler").Start(ctx.Request.Context(), "ExportWaitlist")
+	defer span.End()
+	ctxWithSpan := ctx.Copy()
+	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
 	// Check if user is admin (assuming auth middleware has set role)
 	role, exists := ctx.Get("user_role")
 	if !exists || role != "admin" {

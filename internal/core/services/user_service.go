@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"errors"
 	"fmt"
 	"time"
@@ -19,6 +20,8 @@ type userService struct {
 
 // UpdateKYC implements ports.UserService.
 func (u *userService) UpdateKYC(ctx context.Context, kyc domain.KYC) error {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "UpdateKYC")
+	defer span.End()
 	panic("unimplemented")
 }
 
@@ -31,8 +34,11 @@ func NewUserService(userRepo ports.UserRepository) ports.UserService {
 
 // GetUserByID implements ports.UserService.
 func (u *userService) GetUserByID(ctx context.Context, userID uuid.UUID) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "GetUserByID")
+	defer span.End()
 	user, err := u.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user with ID %s: %w", userID, err)
 	}
 
@@ -44,6 +50,8 @@ func (u *userService) GetUserByID(ctx context.Context, userID uuid.UUID) (*domai
 
 // UpdateUser implements ports.UserService.
 func (u *userService) UpdateUser(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "UpdateUser")
+	defer span.End()
 	// Verify user exists
 	existingUser, err := u.userRepo.GetUserByID(ctx, user.ID)
 	if err != nil {
@@ -69,6 +77,8 @@ func (u *userService) UpdateUser(ctx context.Context, user domain.User) (*domain
 
 // UpdatePassword implements ports.UserService.
 func (u *userService) UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "UpdatePassword")
+	defer span.End()
 	// Get the user
 	user, err := u.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
@@ -109,6 +119,34 @@ func validatePassword(password string) error {
 	}
 
 	// Add more validation as needed
+
+	return nil
+}
+
+// ResetUserPassword updates password without requiring old password (for password reset flow)
+func (u *userService) ResetUserPassword(ctx context.Context, userID uuid.UUID, newPassword string) error {
+	// Get the user to verify it exists
+	_, err := u.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user with ID %s: %w", userID, err)
+	}
+
+	// Validate new password
+	if err := validatePassword(newPassword); err != nil {
+		return err
+	}
+
+	// Hash the new password
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	// Update the password
+	err = u.userRepo.UpdatePassword(ctx, userID, hashedPassword)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
 
 	return nil
 }
