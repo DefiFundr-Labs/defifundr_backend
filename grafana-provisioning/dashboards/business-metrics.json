@@ -1,0 +1,39 @@
+{
+  "id": null,
+  "uid": "business-metrics",
+  "title": "Business Metrics",
+  "tags": ["business", "metrics"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Waitlist Signups (Total)",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
+      "targets": [
+        {
+          "expr": "sum(waitlist_signups_total)",
+          "legendFormat": "Signups",
+          "refId": "A"
+        }
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "graph",
+      "title": "Waitlist Signup Rate",
+      "gridPos": {"x": 8, "y": 0, "w": 16, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(waitlist_signups_total[1m])",
+          "legendFormat": "Signups/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "1/s"}, "overrides": []}
+    }
+  ]
+}

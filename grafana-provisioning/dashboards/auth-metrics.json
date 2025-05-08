@@ -1,0 +1,39 @@
+{
+  "id": null,
+  "uid": "auth-metrics",
+  "title": "Authentication Metrics",
+  "tags": ["auth", "metrics"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Login Requests (Total)",
+      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
+      "targets": [
+        {
+          "expr": "sum(api_requests_total{path='/api/v1/auth/login'})",
+          "legendFormat": "Login Requests",
+          "refId": "A"
+        }
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "graph",
+      "title": "Login Request Rate",
+      "gridPos": {"x": 8, "y": 0, "w": 16, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(api_requests_total{path='/api/v1/auth/login'}[1m])",
+          "legendFormat": "Login Req/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "req/s"}, "overrides": []}
+    }
+  ]
+}
