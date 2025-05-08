@@ -3,6 +3,7 @@ package services
 
 import (
 	"context"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"errors"
 	"fmt"
 	"strings"
@@ -35,9 +36,12 @@ type authService struct {
 
 // SetupMFA sets up multi-factor authentication for a user
 func (a *authService) SetupMFA(ctx context.Context, userID uuid.UUID) (string, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "SetupMFA")
+	defer span.End()
 	// Check if user exists
 	user, err := a.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
+		span.RecordError(err)
 		return "", fmt.Errorf("failed to get user: %w", err)
 	}
 
@@ -67,6 +71,8 @@ func (a *authService) SetupMFA(ctx context.Context, userID uuid.UUID) (string, e
 
 // VerifyMFA verifies a TOTP code
 func (a *authService) VerifyMFA(ctx context.Context, userID uuid.UUID, code string) (bool, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "VerifyMFA")
+	defer span.End()
 	// Get the MFA secret for the user
 	secret, err := a.userRepo.GetMFASecret(ctx, userID)
 	if err != nil {
@@ -116,6 +122,8 @@ func NewAuthService(
 
 // Login implements ports.AuthService.
 func (a *authService) Login(ctx context.Context, email string, user domain.User, password string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "Login")
+	defer span.End()
 	a.logger.Info("Starting user registration process", map[string]interface{}{
 		"email":    email,
 		"provider": user.AuthProvider,
@@ -127,7 +135,9 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 			a.logger.Error("Password required for email authentication", nil, map[string]interface{}{
 				"email": user.Email,
 			})
-			return nil, errors.New("password is required for email authentication")
+			pwErr := errors.New("password is required for email authentication")
+			span.RecordError(pwErr)
+			return nil, pwErr
 		}
 
 		// Check if the user exists
@@ -136,13 +146,16 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 			a.logger.Error("Failed to get user by email", err, map[string]interface{}{
 				"email": email,
 			})
+			span.RecordError(err)
 			return nil, fmt.Errorf("failed to get user by email: %w", err)
 		}
 		if existingUser == nil {
 			a.logger.Error("User not found", nil, map[string]interface{}{
 				"email": email,
 			})
-			return nil, errors.New("user not found")
+			notFoundErr := errors.New("user not found")
+			span.RecordError(notFoundErr)
+			return nil, notFoundErr
 		}
 
 		// Verify the password
@@ -158,7 +171,9 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 			a.logger.Error("Invalid password", nil, map[string]interface{}{
 				"email": email,
 			})
-			return nil, errors.New("invalid password")
+			invPwErr := errors.New("invalid password")
+			span.RecordError(invPwErr)
+			return nil, invPwErr
 		}
 	} else if user.AuthProvider != "" && user.WebAuthToken != "" {
 		// For OAuth or Web3Auth, validate the token and fill user data
@@ -178,7 +193,9 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 		a.logger.Error("Missing authentication credentials", nil, map[string]interface{}{
 			"provider": user.AuthProvider,
 		})
-		return nil, errors.New("missing authentication credentials")
+		credErr := errors.New("missing authentication credentials")
+		span.RecordError(credErr)
+		return nil, credErr
 	}
 	// Step 2: Check if user with same email already exists
 	existingUser, err := a.userRepo.GetUserByEmail(ctx, user.Email)
@@ -186,13 +203,16 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 		a.logger.Error("Failed to get user by email", err, map[string]interface{}{
 			"email": user.Email,
 		})
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 	if existingUser == nil {
 		a.logger.Warn("Login attempt for non-existing email", map[string]interface{}{
 			"email": user.Email,
 		})
-		return nil, errors.New("email not registered")
+		notRegisteredErr := errors.New("email not registered")
+		span.RecordError(notRegisteredErr)
+		return nil, notRegisteredErr
 	}
 
 	// Return the user
@@ -201,6 +221,8 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 
 // RegisterUser implements the user registration process with Web3Auth integration
 func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwordStr string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterUser")
+	defer span.End()
 	a.logger.Info("Starting user registration process", map[string]interface{}{
 		"email":    user.Email,
 		"provider": user.AuthProvider,
@@ -213,7 +235,9 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 			a.logger.Error("Password required for email authentication", nil, map[string]interface{}{
 				"email": user.Email,
 			})
-			return nil, errors.New("password is required for email authentication")
+			pwErr := errors.New("password is required for email authentication")
+			span.RecordError(pwErr)
+			return nil, pwErr
 		}
 
 		// Hash the password
@@ -232,6 +256,7 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 			a.logger.Error("Failed to validate WebAuth token", err, map[string]interface{}{
 				"provider": user.AuthProvider,
 			})
+			span.RecordError(err)
 			return nil, fmt.Errorf("invalid authentication token: %w", err)
 		}
 
@@ -287,6 +312,7 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 		a.logger.Warn("Registration attempt for existing email", map[string]interface{}{
 			"email": user.Email,
 		})
+		span.RecordError(err)
 		return nil, errors.New("email already registered")
 	}
 
@@ -321,6 +347,7 @@ func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.C
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
 			"user_id": companyInfo.UserID,
 		})
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
@@ -349,6 +376,8 @@ func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.C
 
 // RegisterPersonalDetails implements ports.AuthService
 func (a *authService) RegisterPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterPersonalDetails")
+	defer span.End()
 	a.logger.Info("Starting user personal details update process", map[string]interface{}{
 		"user_id": user.ID,
 	})
@@ -359,6 +388,7 @@ func (a *authService) RegisterPersonalDetails(ctx context.Context, user domain.U
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
 			"user_id": user.ID,
 		})
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
@@ -406,6 +436,7 @@ func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo d
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
 			"user_id": companyInfo.UserID,
 		})
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
@@ -452,6 +483,8 @@ func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo d
 
 // RegisterAddressDetails implements ports.AuthService
 func (a *authService) RegisterAddressDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterAddressDetails")
+	defer span.End()
 	a.logger.Info("Starting address details update process", map[string]interface{}{
 		"user_id": user.ID,
 	})
@@ -462,6 +495,7 @@ func (a *authService) RegisterAddressDetails(ctx context.Context, user domain.Us
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
 			"user_id": user.ID,
 		})
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
@@ -498,12 +532,16 @@ func (a *authService) RegisterAddressDetails(ctx context.Context, user domain.Us
 
 // GetUserByEmail implements ports.AuthService.
 func (a *authService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "GetUserByEmail")
+	defer span.End()
 	user, err := a.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 
 	if user == nil {
+		span.RecordError(err)
 		return nil, errors.New("user not found")
 	}
 
@@ -512,12 +550,16 @@ func (a *authService) GetUserByEmail(ctx context.Context, email string) (*domain
 
 // GetUserByID implements ports.AuthService.
 func (a *authService) GetUserByID(ctx context.Context, userID uuid.UUID) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "GetUserByID")
+	defer span.End()
 	user, err := a.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
 	if user == nil {
+		span.RecordError(err)
 		return nil, errors.New("user not found")
 	}
 
@@ -525,8 +567,11 @@ func (a *authService) GetUserByID(ctx context.Context, userID uuid.UUID) (*domai
 }
 
 func (a *authService) CheckEmailExists(ctx context.Context, email string) (bool, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "CheckEmailExists")
+	defer span.End()
 	exists, err := a.userRepo.CheckEmailExists(ctx, email)
 	if err != nil {
+		span.RecordError(err)
 		return false, fmt.Errorf("failed to check if email exists: %w", err)
 	}
 
@@ -535,16 +580,20 @@ func (a *authService) CheckEmailExists(ctx context.Context, email string) (bool,
 
 // AuthenticateWithWeb3 implements unified Web3Auth authentication flow
 func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken string, userAgent string, clientIP string) (*domain.User, *domain.Session, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "AuthenticateWithWeb3")
+	defer span.End()
 	// Validate the Web3Auth token
 	claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
 	if err != nil {
 		a.logger.Error("Web3Auth token validation failed", err, nil)
+		span.RecordError(err)
 		return nil, nil, err
 	}
 
 	// Extract identity information
 	email := claims.Email
 	if email == "" {
+		span.RecordError(err)
 		return nil, nil, errors.New("email not provided in Web3Auth token")
 	}
 
@@ -693,6 +742,8 @@ func (a *authService) processWallet(ctx context.Context, userID uuid.UUID, walle
 
 // LinkWallet links a blockchain wallet to a user account (continued)
 func (a *authService) LinkWallet(ctx context.Context, userID uuid.UUID, walletAddress string, walletType string, chain string) error {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "LinkWallet")
+	defer span.End()
 	// ... (previous code)
 
 	// Log security event
@@ -707,11 +758,15 @@ func (a *authService) LinkWallet(ctx context.Context, userID uuid.UUID, walletAd
 
 // GetUserWallets retrieves all wallets for a user
 func (a *authService) GetUserWallets(ctx context.Context, userID uuid.UUID) ([]domain.UserWallet, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "GetUserWallets")
+	defer span.End()
 	return a.walletRepo.GetWalletsByUserID(ctx, userID)
 }
 
 // GetProfileCompletionStatus calculates profile completion percentage
 func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uuid.UUID) (*domain.ProfileCompletion, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "GetProfileCompletionStatus")
+	defer span.End()
 
 	// Get user data
 	user, err := a.userRepo.GetUserByID(ctx, userID)
@@ -734,7 +789,6 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 	}
 
 	// Account type specific fields
-
 	fields = append(fields, []fieldCheck{
 		{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
 		{"City", true, user.City != ""},
@@ -885,6 +939,8 @@ func (a *authService) detectSuspiciousActivity(ctx context.Context, userID uuid.
 
 // CreateSession creates a new session for the user
 func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userAgent, clientIP string, webOAuthClientID string, email string, loginType string) (*domain.Session, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "CreateSession")
+	defer span.End()
 	a.logger.Info("Creating new session", map[string]interface{}{
 		"user_id": userID,
 		"ip":      clientIP,
@@ -947,6 +1003,8 @@ func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userA
 
 // GetActiveDevices returns all active devices for a user
 func (a *authService) GetActiveDevices(ctx context.Context, userID uuid.UUID) ([]domain.DeviceInfo, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "GetActiveDevices")
+	defer span.End()
 	// Get active sessions
 	activeSessions, err := a.sessionRepo.GetActiveSessionsByUserID(ctx, userID)
 	if err != nil {
@@ -980,6 +1038,8 @@ func (a *authService) GetActiveDevices(ctx context.Context, userID uuid.UUID) ([
 
 // RevokeSession revokes a specific session
 func (a *authService) RevokeSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RevokeSession")
+	defer span.End()
 	// Get session to verify ownership
 	session, err := a.sessionRepo.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -988,6 +1048,7 @@ func (a *authService) RevokeSession(ctx context.Context, userID uuid.UUID, sessi
 
 	// Verify session belongs to user
 	if session.UserID != userID {
+		span.RecordError(err)
 		return errors.New("session does not belong to user")
 	}
 
@@ -1007,11 +1068,15 @@ func (a *authService) RevokeSession(ctx context.Context, userID uuid.UUID, sessi
 
 // Logout logs out a user by revoking their session
 func (a *authService) Logout(ctx context.Context, sessionID uuid.UUID) error {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "Logout")
+	defer span.End()
 	return a.sessionRepo.DeleteSession(ctx, sessionID)
 }
 
 // RefreshToken refreshes an access token
 func (a *authService) RefreshToken(ctx context.Context, refreshToken, userAgent, clientIP string) (*domain.Session, string, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RefreshToken")
+	defer span.End()
 	// Get session by refresh token
 	session, err := a.sessionRepo.GetSessionByRefreshToken(ctx, refreshToken)
 	if err != nil {
@@ -1020,6 +1085,7 @@ func (a *authService) RefreshToken(ctx context.Context, refreshToken, userAgent,
 
 	// Validate session
 	if session == nil || session.IsBlocked || time.Now().After(session.ExpiresAt) {
+		span.RecordError(err)
 		return nil, "", errors.New("invalid or expired refresh token")
 	}
 
@@ -1067,6 +1133,8 @@ func (a *authService) RefreshToken(ctx context.Context, refreshToken, userAgent,
 
 // LogSecurityEvent logs a security event
 func (a *authService) LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]interface{}) error {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "LogSecurityEvent")
+	defer span.End()
 	// Get client IP from context if available
 	clientIP := ""
 	if ipValue := ctx.Value("client_ip"); ipValue != nil {

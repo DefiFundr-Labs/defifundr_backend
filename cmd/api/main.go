@@ -16,12 +16,14 @@ import (
 	"github.com/demola234/defifundr/internal/adapters/routers"
 	"github.com/demola234/defifundr/internal/core/services"
 	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // @title DefiFundr API
@@ -121,12 +123,34 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 	waitlistHandler := handlers.NewWaitlistHandler(waitlistService, logger)
 
+	// Initialize OpenTelemetry
+	tracingCfg := tracing.Config{
+		ServiceName:       "defifundr-api",
+		ServiceVersion:    "0.1.0",
+		Environment:       configs.Environment,
+		UseStdoutExporter: configs.Environment != "production", // Use stdout in dev
+	}
+
+	// Set up OpenTelemetry
+	otelShutdown, err := tracing.SetupOTel(context.Background(), tracingCfg)
+	if err != nil {
+		logger.Fatal("Failed to set up OpenTelemetry", err, map[string]interface{}{
+			"service": tracingCfg.ServiceName,
+		})
+	}
+	defer func() {
+		if err := otelShutdown(context.Background()); err != nil {
+			logger.Error("Failed to shutdown OpenTelemetry", err, nil)
+		}
+	}()
+
 	// Initialize the router
 	router := gin.New()
 
 	// Apply our custom logging middleware
 	router.Use(middleware.LoggingMiddleware(logger, &configs))
 	router.Use(gin.Recovery())
+	router.Use(otelgin.Middleware("defifundr-api"))
 
 	// Configure CORS to allow all origins
 	router.Use(cors.New(cors.Config{

@@ -9,6 +9,7 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -24,6 +25,8 @@ func NewSessionRepository(store db.Queries) *SessionRepository {
 
 // CreateSession creates a new session
 func (r *SessionRepository) CreateSession(ctx context.Context, session domain.Session) (*domain.Session, error) {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "CreateSession")
+	defer span.End()
 	params := db.CreateSessionParams{
 		ID:               session.ID,
 		UserID:           session.UserID,
@@ -58,6 +61,8 @@ func (r *SessionRepository) CreateSession(ctx context.Context, session domain.Se
 
 // GetSessionByID gets a session by ID
 func (r *SessionRepository) GetSessionByID(ctx context.Context, id uuid.UUID) (*domain.Session, error) {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetSessionByID")
+	defer span.End()
 	dbSession, err := r.store.GetSessionByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session by ID: %w", err)
@@ -68,6 +73,8 @@ func (r *SessionRepository) GetSessionByID(ctx context.Context, id uuid.UUID) (*
 
 // GetSessionByRefreshToken gets a session by refresh token
 func (r *SessionRepository) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*domain.Session, error) {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetSessionByRefreshToken")
+	defer span.End()
 	dbSession, err := r.store.GetSessionByRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session by refresh token: %w", err)
@@ -78,6 +85,12 @@ func (r *SessionRepository) GetSessionByRefreshToken(ctx context.Context, refres
 
 // GetActiveSessionsByUserID gets all active sessions for a user
 func (r *SessionRepository) GetActiveSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
+	return r.GetSessionsByUserID(ctx, userID)
+}
+
+func (r *SessionRepository) GetSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetSessionsByUserID")
+	defer span.End()
 	dbSessions, err := r.store.GetActiveSessionsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active sessions: %w", err)
@@ -93,6 +106,8 @@ func (r *SessionRepository) GetActiveSessionsByUserID(ctx context.Context, userI
 
 // UpdateRefreshToken updates a session's refresh token
 func (r *SessionRepository) UpdateRefreshToken(ctx context.Context, sessionID uuid.UUID, refreshToken string) (*domain.Session, error) {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "UpdateRefreshToken")
+	defer span.End()
 	params := db.UpdateSessionRefreshTokenParams{
 		ID:           sessionID,
 		RefreshToken: refreshToken,
@@ -109,6 +124,8 @@ func (r *SessionRepository) UpdateRefreshToken(ctx context.Context, sessionID uu
 
 // UpdateSession updates a session
 func (r *SessionRepository) UpdateSession(ctx context.Context, session domain.Session) error {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "UpdateSession")
+	defer span.End()
 	params := db.UpdateSessionParams{
 		ID:         session.ID,
 		IsBlocked:  session.IsBlocked,
@@ -126,6 +143,8 @@ func (r *SessionRepository) UpdateSession(ctx context.Context, session domain.Se
 
 // BlockSession blocks a session
 func (r *SessionRepository) BlockSession(ctx context.Context, id uuid.UUID) error {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "BlockSession")
+	defer span.End()
 	err := r.store.BlockSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to block session: %w", err)
@@ -136,6 +155,12 @@ func (r *SessionRepository) BlockSession(ctx context.Context, id uuid.UUID) erro
 
 // BlockAllUserSessions blocks all sessions for a user
 func (r *SessionRepository) BlockAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	return r.RevokeAllUserSessions(ctx, userID)
+}
+
+func (r *SessionRepository) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "RevokeAllUserSessions")
+	defer span.End()
 	err := r.store.BlockAllUserSessions(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to block all user sessions: %w", err)
@@ -146,6 +171,8 @@ func (r *SessionRepository) BlockAllUserSessions(ctx context.Context, userID uui
 
 // DeleteSession deletes a session
 func (r *SessionRepository) DeleteSession(ctx context.Context, id uuid.UUID) error {
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "DeleteSession")
+	defer span.End()
 	err := r.store.DeleteSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)

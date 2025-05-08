@@ -8,6 +8,7 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -23,6 +24,8 @@ func NewSecurityRepository(store db.Queries) *SecurityRepository {
 
 // LogSecurityEvent logs a security event
 func (r *SecurityRepository) LogSecurityEvent(ctx context.Context, event domain.SecurityEvent) error {
+	ctx, span := tracing.Tracer("security-repository").Start(ctx, "LogSecurityEvent")
+	defer span.End()
 	params := db.CreateSecurityEventParams{
 		ID:        event.ID,
 		UserID:    event.UserID,
@@ -42,6 +45,8 @@ func (r *SecurityRepository) LogSecurityEvent(ctx context.Context, event domain.
 
 // GetRecentLoginsByUserID gets recent login events for a user
 func (r *SecurityRepository) GetRecentLoginsByUserID(ctx context.Context, userID uuid.UUID, limit int) ([]domain.SecurityEvent, error) {
+	ctx, span := tracing.Tracer("security-repository").Start(ctx, "GetRecentLoginsByUserID")
+	defer span.End()
 	params := db.GetRecentLoginEventsByUserIDParams{
 		UserID: userID,
 		Limit:  int32(limit),

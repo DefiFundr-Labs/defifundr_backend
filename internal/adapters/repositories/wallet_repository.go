@@ -9,6 +9,7 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
+	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -24,6 +25,8 @@ func NewWalletRepository(store db.Queries) *WalletRepository {
 
 // CreateWallet creates a new wallet for a user
 func (r *WalletRepository) CreateWallet(ctx context.Context, wallet domain.UserWallet) error {
+	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "CreateWallet")
+	defer span.End()
 	params := db.CreateUserWalletParams{
 		ID:        wallet.ID,
 		UserID:    wallet.UserID,
@@ -45,6 +48,8 @@ func (r *WalletRepository) CreateWallet(ctx context.Context, wallet domain.UserW
 
 // GetWalletByAddress finds a wallet by its address
 func (r *WalletRepository) GetWalletByAddress(ctx context.Context, address string) (*domain.UserWallet, error) {
+	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "GetWalletByAddress")
+	defer span.End()
 	wallet, err := r.store.GetWalletByAddress(ctx, address)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -58,6 +63,8 @@ func (r *WalletRepository) GetWalletByAddress(ctx context.Context, address strin
 
 // GetWalletsByUserID gets all wallets for a user
 func (r *WalletRepository) GetWalletsByUserID(ctx context.Context, userID uuid.UUID) ([]domain.UserWallet, error) {
+	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "GetWalletsByUserID")
+	defer span.End()
 	wallets, err := r.store.GetWalletsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get wallets by user ID: %w", err)
@@ -73,6 +80,8 @@ func (r *WalletRepository) GetWalletsByUserID(ctx context.Context, userID uuid.U
 
 // UpdateWallet updates a wallet
 func (r *WalletRepository) UpdateWallet(ctx context.Context, wallet domain.UserWallet) error {
+	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "UpdateWallet")
+	defer span.End()
 	params := db.UpdateUserWalletParams{
 		ID:        wallet.ID,
 		IsDefault: wallet.IsDefault,
