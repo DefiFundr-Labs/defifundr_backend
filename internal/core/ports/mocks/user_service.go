@@ -25,6 +25,19 @@ type FakeUserService struct {
 		result1 *domain.User
 		result2 error
 	}
+	ResetUserPasswordStub        func(context.Context, uuid.UUID, string) error
+	resetUserPasswordMutex       sync.RWMutex
+	resetUserPasswordArgsForCall []struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+		arg3 string
+	}
+	resetUserPasswordReturns struct {
+		result1 error
+	}
+	resetUserPasswordReturnsOnCall map[int]struct {
+		result1 error
+	}
 	UpdateKYCStub        func(context.Context, domain.KYC) error
 	updateKYCMutex       sync.RWMutex
 	updateKYCArgsForCall []struct {
@@ -132,6 +145,69 @@ func (fake *FakeUserService) GetUserByIDReturnsOnCall(i int, result1 *domain.Use
 		result1 *domain.User
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeUserService) ResetUserPassword(arg1 context.Context, arg2 uuid.UUID, arg3 string) error {
+	fake.resetUserPasswordMutex.Lock()
+	ret, specificReturn := fake.resetUserPasswordReturnsOnCall[len(fake.resetUserPasswordArgsForCall)]
+	fake.resetUserPasswordArgsForCall = append(fake.resetUserPasswordArgsForCall, struct {
+		arg1 context.Context
+		arg2 uuid.UUID
+		arg3 string
+	}{arg1, arg2, arg3})
+	stub := fake.ResetUserPasswordStub
+	fakeReturns := fake.resetUserPasswordReturns
+	fake.recordInvocation("ResetUserPassword", []interface{}{arg1, arg2, arg3})
+	fake.resetUserPasswordMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeUserService) ResetUserPasswordCallCount() int {
+	fake.resetUserPasswordMutex.RLock()
+	defer fake.resetUserPasswordMutex.RUnlock()
+	return len(fake.resetUserPasswordArgsForCall)
+}
+
+func (fake *FakeUserService) ResetUserPasswordCalls(stub func(context.Context, uuid.UUID, string) error) {
+	fake.resetUserPasswordMutex.Lock()
+	defer fake.resetUserPasswordMutex.Unlock()
+	fake.ResetUserPasswordStub = stub
+}
+
+func (fake *FakeUserService) ResetUserPasswordArgsForCall(i int) (context.Context, uuid.UUID, string) {
+	fake.resetUserPasswordMutex.RLock()
+	defer fake.resetUserPasswordMutex.RUnlock()
+	argsForCall := fake.resetUserPasswordArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeUserService) ResetUserPasswordReturns(result1 error) {
+	fake.resetUserPasswordMutex.Lock()
+	defer fake.resetUserPasswordMutex.Unlock()
+	fake.ResetUserPasswordStub = nil
+	fake.resetUserPasswordReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeUserService) ResetUserPasswordReturnsOnCall(i int, result1 error) {
+	fake.resetUserPasswordMutex.Lock()
+	defer fake.resetUserPasswordMutex.Unlock()
+	fake.ResetUserPasswordStub = nil
+	if fake.resetUserPasswordReturnsOnCall == nil {
+		fake.resetUserPasswordReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.resetUserPasswordReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeUserService) UpdateKYC(arg1 context.Context, arg2 domain.KYC) error {
@@ -330,6 +406,8 @@ func (fake *FakeUserService) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.getUserByIDMutex.RLock()
 	defer fake.getUserByIDMutex.RUnlock()
+	fake.resetUserPasswordMutex.RLock()
+	defer fake.resetUserPasswordMutex.RUnlock()
 	fake.updateKYCMutex.RLock()
 	defer fake.updateKYCMutex.RUnlock()
 	fake.updatePasswordMutex.RLock()

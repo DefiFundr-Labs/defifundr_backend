@@ -132,6 +132,18 @@ type FakeAuthService struct {
 		result1 []domain.UserWallet
 		result2 error
 	}
+	InitiatePasswordResetStub        func(context.Context, string) error
+	initiatePasswordResetMutex       sync.RWMutex
+	initiatePasswordResetArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+	}
+	initiatePasswordResetReturns struct {
+		result1 error
+	}
+	initiatePasswordResetReturnsOnCall map[int]struct {
+		result1 error
+	}
 	LinkWalletStub        func(context.Context, uuid.UUID, string, string, string) error
 	linkWalletMutex       sync.RWMutex
 	linkWalletArgsForCall []struct {
@@ -264,6 +276,20 @@ type FakeAuthService struct {
 		result1 *domain.User
 		result2 error
 	}
+	ResetPasswordStub        func(context.Context, string, string, string) error
+	resetPasswordMutex       sync.RWMutex
+	resetPasswordArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+		arg4 string
+	}
+	resetPasswordReturns struct {
+		result1 error
+	}
+	resetPasswordReturnsOnCall map[int]struct {
+		result1 error
+	}
 	RevokeSessionStub        func(context.Context, uuid.UUID, uuid.UUID) error
 	revokeSessionMutex       sync.RWMutex
 	revokeSessionArgsForCall []struct {
@@ -305,6 +331,19 @@ type FakeAuthService struct {
 	verifyMFAReturnsOnCall map[int]struct {
 		result1 bool
 		result2 error
+	}
+	VerifyResetOTPStub        func(context.Context, string, string) error
+	verifyResetOTPMutex       sync.RWMutex
+	verifyResetOTPArgsForCall []struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+	}
+	verifyResetOTPReturns struct {
+		result1 error
+	}
+	verifyResetOTPReturnsOnCall map[int]struct {
+		result1 error
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -838,6 +877,68 @@ func (fake *FakeAuthService) GetUserWalletsReturnsOnCall(i int, result1 []domain
 		result1 []domain.UserWallet
 		result2 error
 	}{result1, result2}
+}
+
+func (fake *FakeAuthService) InitiatePasswordReset(arg1 context.Context, arg2 string) error {
+	fake.initiatePasswordResetMutex.Lock()
+	ret, specificReturn := fake.initiatePasswordResetReturnsOnCall[len(fake.initiatePasswordResetArgsForCall)]
+	fake.initiatePasswordResetArgsForCall = append(fake.initiatePasswordResetArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+	}{arg1, arg2})
+	stub := fake.InitiatePasswordResetStub
+	fakeReturns := fake.initiatePasswordResetReturns
+	fake.recordInvocation("InitiatePasswordReset", []interface{}{arg1, arg2})
+	fake.initiatePasswordResetMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeAuthService) InitiatePasswordResetCallCount() int {
+	fake.initiatePasswordResetMutex.RLock()
+	defer fake.initiatePasswordResetMutex.RUnlock()
+	return len(fake.initiatePasswordResetArgsForCall)
+}
+
+func (fake *FakeAuthService) InitiatePasswordResetCalls(stub func(context.Context, string) error) {
+	fake.initiatePasswordResetMutex.Lock()
+	defer fake.initiatePasswordResetMutex.Unlock()
+	fake.InitiatePasswordResetStub = stub
+}
+
+func (fake *FakeAuthService) InitiatePasswordResetArgsForCall(i int) (context.Context, string) {
+	fake.initiatePasswordResetMutex.RLock()
+	defer fake.initiatePasswordResetMutex.RUnlock()
+	argsForCall := fake.initiatePasswordResetArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
+}
+
+func (fake *FakeAuthService) InitiatePasswordResetReturns(result1 error) {
+	fake.initiatePasswordResetMutex.Lock()
+	defer fake.initiatePasswordResetMutex.Unlock()
+	fake.InitiatePasswordResetStub = nil
+	fake.initiatePasswordResetReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeAuthService) InitiatePasswordResetReturnsOnCall(i int, result1 error) {
+	fake.initiatePasswordResetMutex.Lock()
+	defer fake.initiatePasswordResetMutex.Unlock()
+	fake.InitiatePasswordResetStub = nil
+	if fake.initiatePasswordResetReturnsOnCall == nil {
+		fake.initiatePasswordResetReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.initiatePasswordResetReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
 }
 
 func (fake *FakeAuthService) LinkWallet(arg1 context.Context, arg2 uuid.UUID, arg3 string, arg4 string, arg5 string) error {
@@ -1429,6 +1530,70 @@ func (fake *FakeAuthService) RegisterUserReturnsOnCall(i int, result1 *domain.Us
 	}{result1, result2}
 }
 
+func (fake *FakeAuthService) ResetPassword(arg1 context.Context, arg2 string, arg3 string, arg4 string) error {
+	fake.resetPasswordMutex.Lock()
+	ret, specificReturn := fake.resetPasswordReturnsOnCall[len(fake.resetPasswordArgsForCall)]
+	fake.resetPasswordArgsForCall = append(fake.resetPasswordArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+		arg4 string
+	}{arg1, arg2, arg3, arg4})
+	stub := fake.ResetPasswordStub
+	fakeReturns := fake.resetPasswordReturns
+	fake.recordInvocation("ResetPassword", []interface{}{arg1, arg2, arg3, arg4})
+	fake.resetPasswordMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3, arg4)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeAuthService) ResetPasswordCallCount() int {
+	fake.resetPasswordMutex.RLock()
+	defer fake.resetPasswordMutex.RUnlock()
+	return len(fake.resetPasswordArgsForCall)
+}
+
+func (fake *FakeAuthService) ResetPasswordCalls(stub func(context.Context, string, string, string) error) {
+	fake.resetPasswordMutex.Lock()
+	defer fake.resetPasswordMutex.Unlock()
+	fake.ResetPasswordStub = stub
+}
+
+func (fake *FakeAuthService) ResetPasswordArgsForCall(i int) (context.Context, string, string, string) {
+	fake.resetPasswordMutex.RLock()
+	defer fake.resetPasswordMutex.RUnlock()
+	argsForCall := fake.resetPasswordArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3, argsForCall.arg4
+}
+
+func (fake *FakeAuthService) ResetPasswordReturns(result1 error) {
+	fake.resetPasswordMutex.Lock()
+	defer fake.resetPasswordMutex.Unlock()
+	fake.ResetPasswordStub = nil
+	fake.resetPasswordReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeAuthService) ResetPasswordReturnsOnCall(i int, result1 error) {
+	fake.resetPasswordMutex.Lock()
+	defer fake.resetPasswordMutex.Unlock()
+	fake.ResetPasswordStub = nil
+	if fake.resetPasswordReturnsOnCall == nil {
+		fake.resetPasswordReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.resetPasswordReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeAuthService) RevokeSession(arg1 context.Context, arg2 uuid.UUID, arg3 uuid.UUID) error {
 	fake.revokeSessionMutex.Lock()
 	ret, specificReturn := fake.revokeSessionReturnsOnCall[len(fake.revokeSessionArgsForCall)]
@@ -1623,6 +1788,69 @@ func (fake *FakeAuthService) VerifyMFAReturnsOnCall(i int, result1 bool, result2
 	}{result1, result2}
 }
 
+func (fake *FakeAuthService) VerifyResetOTP(arg1 context.Context, arg2 string, arg3 string) error {
+	fake.verifyResetOTPMutex.Lock()
+	ret, specificReturn := fake.verifyResetOTPReturnsOnCall[len(fake.verifyResetOTPArgsForCall)]
+	fake.verifyResetOTPArgsForCall = append(fake.verifyResetOTPArgsForCall, struct {
+		arg1 context.Context
+		arg2 string
+		arg3 string
+	}{arg1, arg2, arg3})
+	stub := fake.VerifyResetOTPStub
+	fakeReturns := fake.verifyResetOTPReturns
+	fake.recordInvocation("VerifyResetOTP", []interface{}{arg1, arg2, arg3})
+	fake.verifyResetOTPMutex.Unlock()
+	if stub != nil {
+		return stub(arg1, arg2, arg3)
+	}
+	if specificReturn {
+		return ret.result1
+	}
+	return fakeReturns.result1
+}
+
+func (fake *FakeAuthService) VerifyResetOTPCallCount() int {
+	fake.verifyResetOTPMutex.RLock()
+	defer fake.verifyResetOTPMutex.RUnlock()
+	return len(fake.verifyResetOTPArgsForCall)
+}
+
+func (fake *FakeAuthService) VerifyResetOTPCalls(stub func(context.Context, string, string) error) {
+	fake.verifyResetOTPMutex.Lock()
+	defer fake.verifyResetOTPMutex.Unlock()
+	fake.VerifyResetOTPStub = stub
+}
+
+func (fake *FakeAuthService) VerifyResetOTPArgsForCall(i int) (context.Context, string, string) {
+	fake.verifyResetOTPMutex.RLock()
+	defer fake.verifyResetOTPMutex.RUnlock()
+	argsForCall := fake.verifyResetOTPArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
+}
+
+func (fake *FakeAuthService) VerifyResetOTPReturns(result1 error) {
+	fake.verifyResetOTPMutex.Lock()
+	defer fake.verifyResetOTPMutex.Unlock()
+	fake.VerifyResetOTPStub = nil
+	fake.verifyResetOTPReturns = struct {
+		result1 error
+	}{result1}
+}
+
+func (fake *FakeAuthService) VerifyResetOTPReturnsOnCall(i int, result1 error) {
+	fake.verifyResetOTPMutex.Lock()
+	defer fake.verifyResetOTPMutex.Unlock()
+	fake.VerifyResetOTPStub = nil
+	if fake.verifyResetOTPReturnsOnCall == nil {
+		fake.verifyResetOTPReturnsOnCall = make(map[int]struct {
+			result1 error
+		})
+	}
+	fake.verifyResetOTPReturnsOnCall[i] = struct {
+		result1 error
+	}{result1}
+}
+
 func (fake *FakeAuthService) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
@@ -1642,6 +1870,8 @@ func (fake *FakeAuthService) Invocations() map[string][][]interface{} {
 	defer fake.getUserByIDMutex.RUnlock()
 	fake.getUserWalletsMutex.RLock()
 	defer fake.getUserWalletsMutex.RUnlock()
+	fake.initiatePasswordResetMutex.RLock()
+	defer fake.initiatePasswordResetMutex.RUnlock()
 	fake.linkWalletMutex.RLock()
 	defer fake.linkWalletMutex.RUnlock()
 	fake.logSecurityEventMutex.RLock()
@@ -1660,12 +1890,16 @@ func (fake *FakeAuthService) Invocations() map[string][][]interface{} {
 	defer fake.registerPersonalDetailsMutex.RUnlock()
 	fake.registerUserMutex.RLock()
 	defer fake.registerUserMutex.RUnlock()
+	fake.resetPasswordMutex.RLock()
+	defer fake.resetPasswordMutex.RUnlock()
 	fake.revokeSessionMutex.RLock()
 	defer fake.revokeSessionMutex.RUnlock()
 	fake.setupMFAMutex.RLock()
 	defer fake.setupMFAMutex.RUnlock()
 	fake.verifyMFAMutex.RLock()
 	defer fake.verifyMFAMutex.RUnlock()
+	fake.verifyResetOTPMutex.RLock()
+	defer fake.verifyResetOTPMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

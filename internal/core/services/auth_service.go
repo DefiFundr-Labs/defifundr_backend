@@ -347,7 +347,7 @@ func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.C
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
 			"user_id": companyInfo.UserID,
 		})
-		span.RecordError(err)
+		
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
@@ -436,7 +436,6 @@ func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo d
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
 			"user_id": companyInfo.UserID,
 		})
-		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
