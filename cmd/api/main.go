@@ -231,7 +231,7 @@ func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHand
 	if err != nil {
 		logger.Panic("failed to create token maker", err)
 	}
-
+ 
 	// Middleware to check if the user is authenticated
 	authMiddleware := middleware.AuthMiddleware(tokenMaker, logger)
 
