@@ -1,10 +1,10 @@
 # DefiFundr - A Decentralized Payroll Platform
 
 [![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/demola234/deFICrowdFunding-Backend/test.yml)](https://github.com/DefiFundr-Labs/defifundr_backend/actions)
+[![License](https://img.shields.io/github/license/DefiFundr-Labs/defifundr_backend)](https://github.com/DefiFundr-Labs/defifundr_backend/blob/main/LICENSE)
 ![GitHub go.mod Go version (branch & subdirectory of monorepo)](https://img.shields.io/github/go-mod/go-version/demola234/deFICrowdFunding-Backend/main)
 [![GitHub issues](https://img.shields.io/github/issues/demola234/deFICrowdFunding-Backend)](https://github.com/DefiFundr-Labs/defifundr_backend/issues?q=is%3Aissue%20state%3Aopen)
 [![GitHub Repo stars](https://img.shields.io/github/stars/demola234/deFICrowdFunding-Backend)](https://github.com/DefiFundr-Labs/defifundr_backend/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/demola234/deFICrowdFunding-Backend)](https://github.com/DefiFundr-Labs/defifundr_backend/network/members)
 
 ## 📋 Table of Contents
 
