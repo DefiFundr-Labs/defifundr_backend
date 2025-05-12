@@ -11,6 +11,7 @@ type Config struct {
 	// Database Configuration
 	DBDriver string `mapstructure:"DB_DRIVER"`
 	DBSource string `mapstructure:"DB_SOURCE"`
+	DBHOST     string `mapstructure:"DB_HOST"`
 
 	// Token Configuration
 	TokenSymmetricKey    string        `mapstructure:"TOKEN_SYMMETRIC_KEY"`

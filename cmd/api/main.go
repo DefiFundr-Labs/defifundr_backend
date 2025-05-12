@@ -144,7 +144,7 @@ func main() {
 		ServiceName:       "defifundr-api",
 		ServiceVersion:    "0.1.0",
 		Environment:       configs.Environment,
-		UseStdoutExporter: configs.Environment != "production", // Use stdout in dev
+		UseStdoutExporter: configs.Environment != "production",
 	}
 
 	// Set up OpenTelemetry
@@ -184,7 +184,7 @@ func main() {
 	// Explicitly set host based on environment without protocol
 	var swaggerHost string
 	if configs.Environment == "production" {
-		swaggerHost = "defifundr.koyeb.app"
+		swaggerHost = configs.DBHOST
 	} else {
 		swaggerHost = "localhost:8080"
 	}
@@ -231,7 +231,7 @@ func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHand
 	if err != nil {
 		logger.Panic("failed to create token maker", err)
 	}
- 
+
 	// Middleware to check if the user is authenticated
 	authMiddleware := middleware.AuthMiddleware(tokenMaker, logger)
 

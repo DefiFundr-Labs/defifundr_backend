@@ -66,11 +66,28 @@ migrate-reset:
 	goose -dir db/migrations postgres "$(DB_URL)" reset 
 
 # Documentation commands
-db_docs:
-	dbdocs build docs/db.dbml
+# Database documentation
+DB_DOCS_DIR=cmd/api/docs/db_diagram
+DB_DBML_FILE=$(DB_DOCS_DIR)/db.dbml
+
+.PHONY: db_docs db_diagram
+
+# Create directory if it doesn't exist
+$(DB_DOCS_DIR):
+	mkdir -p $(DB_DOCS_DIR)
+
+# Generate DBML file from the dbdiagram source
+db_dbml: $(DB_DOCS_DIR)
+	cp dbdiagram.txt $(DB_DBML_FILE)
+
+db_docs: 
+	@echo "Installing dbdocs CLI..."
+	npm install -g dbdocs
+	@echo "Building database documentation..."
+	dbdocs build $(DB_DBML_FILE)
 
 db_schema:
-	dbml2sql --postgress -o docs/schema.sql docs/db.dbml
+	dbml2sql --postgress -o cmd/api/docs/db_diagram/schema.sql cmd/api/docs/db_diagram/db.dbml
 
 # Development commands
 sqlc:
