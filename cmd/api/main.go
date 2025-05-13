@@ -184,7 +184,7 @@ func main() {
 	// Explicitly set host based on environment without protocol
 	var swaggerHost string
 	if configs.Environment == "production" {
-		swaggerHost = configs.DBHOST
+		swaggerHost = "defifundr.koyeb.app"
 	} else {
 		swaggerHost = "localhost:8080"
 	}
