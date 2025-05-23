@@ -39,7 +39,7 @@ func (e *OtpPurpose) Scan(src interface{}) error {
 
 type NullOtpPurpose struct {
 	OtpPurpose OtpPurpose `json:"otp_purpose"`
-	Valid      bool       `json:"valid"` // Valid is true if OtpPurpose is not NULL
+	Valid      bool       `json:"valid"` 
 }
 
 // Scan implements the Scanner interface.
@@ -121,9 +121,7 @@ type Transactions struct {
 	ID     uuid.UUID `json:"id"`
 	UserID uuid.UUID `json:"user_id"`
 	TxHash string    `json:"tx_hash"`
-	// hashed transaction pin
 	TransactionPinHash string `json:"transaction_pin_hash"`
-	// created, pending, not_found, failed
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
