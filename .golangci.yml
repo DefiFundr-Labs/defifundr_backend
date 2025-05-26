@@ -10,4 +10,4 @@ issues:
         - errcheck
 
 run:
-  timeout: 5m
+  timeout: 9m
