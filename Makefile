@@ -1,4 +1,29 @@
-# Load .env file if it exists
+# Observability targets
+validate-observability: ## Validate observability setup
+	@echo "🔍 Validating observability setup..."
+	@echo "📊 Checking metrics endpoint..."
+	@if curl -f -s http://localhost:8080/metrics > /dev/null; then \
+		echo "✅ Metrics endpoint is accessible"; \
+	else \
+		echo "❌ Metrics endpoint is not accessible - make sure the server is running"; \
+		exit 1; \
+	fi
+	@echo "�� Checking health endpoint..."
+	@if curl -f -s http://localhost:8080/health > /dev/null; then \
+		echo "✅ Health endpoint is accessible"; \
+	else \
+		echo "❌ Health endpoint is not accessible"; \
+		exit 1; \
+	fi
+	@echo "📈 Validating Prometheus metrics format..."
+	@if curl -s http://localhost:8080/metrics | grep -q "^# HELP"; then \
+		echo "✅ Prometheus metrics format is valid"; \
+	else \
+		echo "❌ Prometheus metrics format is invalid"; \
+		exit 1; \
+	fi
+	@echo "🎯 All observability checks passed!"
+  # Load .env file if it exists
 ifneq (,$(wildcard .env))
     include .env
     export

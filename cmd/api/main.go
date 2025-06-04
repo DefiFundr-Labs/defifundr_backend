@@ -6,11 +6,14 @@ import (
 	"time"
 
 	"github.com/demola234/defifundr/cmd/api/docs"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/DefiFundr-Labs/defifundr_backend/pkg/metrics"
+	"github.com/DefiFundr-Labs/defifundr_backend/infrastructure/middleware"
 	"github.com/demola234/defifundr/config"
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	"github.com/demola234/defifundr/infrastructure/mail"
-	"github.com/demola234/defifundr/infrastructure/middleware"
+	middlewareLocal "github.com/demola234/defifundr/infrastructure/middleware"
 	"github.com/demola234/defifundr/internal/adapters/handlers"
 	"github.com/demola234/defifundr/internal/adapters/repositories"
 	"github.com/demola234/defifundr/internal/adapters/routers"
@@ -25,7 +28,6 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -47,6 +49,11 @@ import (
 // @description Type "Bearer" followed by a space and the JWT token.
 
 var (
+	// Build information - these would typically be set via ldflags during build
+	version   = "1.0.0"
+	commit    = "dev"
+	buildTime = "unknown"
+	
 	apiRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "api_requests_total",
@@ -62,11 +69,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot load config: %v", err)
 	}
+	
 	// Initialize logger
 	logger := logging.New(&configs)
 	logger.Info("Starting application", map[string]interface{}{
 		"environment": configs.Environment,
+		"version":     version,
+		"commit":      commit,
+		"build_time":  buildTime,
 	})
+
+	// Initialize metrics with application info
+	metrics.SetApplicationInfo(version, commit, buildTime)
 
 	// Register Prometheus metrics
 	prometheus.MustRegister(apiRequests)
@@ -142,7 +156,7 @@ func main() {
 	// Initialize OpenTelemetry
 	tracingCfg := tracing.Config{
 		ServiceName:       "defifundr-api",
-		ServiceVersion:    "0.1.0",
+		ServiceVersion:    version,
 		Environment:       configs.Environment,
 		UseStdoutExporter: configs.Environment != "production",
 	}
@@ -163,10 +177,15 @@ func main() {
 	// Initialize the router
 	router := gin.New()
 
-	// Apply our custom logging middleware
-	router.Use(middleware.LoggingMiddleware(logger, &configs))
+	// Apply middleware in order
+	router.Use(middlewareLocal.LoggingMiddleware(logger, &configs))
 	router.Use(gin.Recovery())
 	router.Use(otelgin.Middleware("defifundr-api"))
+	
+	// Add metrics middleware
+	router.Use(middleware.PrometheusMiddleware())
+	router.Use(middleware.AuthMetricsMiddleware())
+	router.Use(middleware.TransactionMetricsMiddleware())
 
 	// Configure CORS to allow all origins
 	router.Use(cors.New(cors.Config{
@@ -177,6 +196,25 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// Health check endpoint with optional delay for testing
+	router.GET("/health", func(c *gin.Context) {
+		delay := c.Query("delay")
+		if delay != "" {
+			if d, err := time.ParseDuration(delay + "ms"); err == nil {
+				time.Sleep(d)
+			}
+		}
+		c.JSON(200, gin.H{
+			"status":    "healthy",
+			"timestamp": time.Now(),
+			"service":   "defifundr-api",
+			"version":   version,
+		})
+	})
+
+	// Prometheus /metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Set up API routes
 	setupRoutes(router, authHandler, userHandler, waitlistHandler, configs, logger)
@@ -192,7 +230,7 @@ func main() {
 	// Set Swagger info
 	docs.SwaggerInfo.Title = "DefiFundr API"
 	docs.SwaggerInfo.Description = "Decentralized Payroll and Invoicing Platform for Remote Teams"
-	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.Version = version
 	docs.SwaggerInfo.Host = swaggerHost
 	docs.SwaggerInfo.BasePath = "/api/v1"
 	if configs.Environment == "production" {
@@ -203,9 +241,6 @@ func main() {
 
 	// Setup Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
-	// Prometheus /metrics endpoint
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Start the HTTP server
 	logger.Info("HTTP server is running on", map[string]interface{}{
@@ -218,13 +253,6 @@ func main() {
 
 // setupRoutes configures all the API routes
 func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, waitlistHandler *handlers.WaitlistHandler, configs config.Config, logger logging.Logger) {
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status": "UP",
-		})
-	})
-
 	v1 := router.Group("/api/v1")
 
 	tokenMaker, err := tokenMaker.NewTokenMaker(configs.TokenSymmetricKey)
@@ -233,7 +261,7 @@ func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHand
 	}
 
 	// Middleware to check if the user is authenticated
-	authMiddleware := middleware.AuthMiddleware(tokenMaker, logger)
+	authMiddleware := middlewareLocal.AuthMiddleware(tokenMaker, logger)
 
 	// Register routes
 	routers.RegisterAuthRoutes(router, authHandler, tokenMaker, logger)
