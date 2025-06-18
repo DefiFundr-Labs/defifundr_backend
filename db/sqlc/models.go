@@ -5,192 +5,962 @@
 package sqlc
 
 import (
-	"database/sql/driver"
-	"fmt"
-	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
-type OtpPurpose string
-
-const (
-	OtpPurposeEmailVerification OtpPurpose = "email_verification"
-	OtpPurposePasswordReset     OtpPurpose = "password_reset"
-	OtpPurposePhoneVerification OtpPurpose = "phone_verification"
-	OtpPurposeAccountRecovery   OtpPurpose = "account_recovery"
-	OtpPurposeTwoFactorAuth     OtpPurpose = "two_factor_auth"
-	OtpPurposeLoginConfirmation OtpPurpose = "login_confirmation"
-)
-
-func (e *OtpPurpose) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = OtpPurpose(s)
-	case string:
-		*e = OtpPurpose(s)
-	default:
-		return fmt.Errorf("unsupported scan type for OtpPurpose: %T", src)
-	}
-	return nil
+type ActivityLogs struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       uuid.UUID          `json:"user_id"`
+	ActivityType string             `json:"activity_type"`
+	Description  pgtype.Text        `json:"description"`
+	Metadata     []byte             `json:"metadata"`
+	IpAddress    pgtype.Text        `json:"ip_address"`
+	UserAgent    pgtype.Text        `json:"user_agent"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
-type NullOtpPurpose struct {
-	OtpPurpose OtpPurpose `json:"otp_purpose"`
-	Valid      bool       `json:"valid"` 
+type ApiKeys struct {
+	ID          uuid.UUID          `json:"id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	CompanyID   pgtype.UUID        `json:"company_id"`
+	ApiKeyHash  string             `json:"api_key_hash"`
+	Name        string             `json:"name"`
+	Permissions []byte             `json:"permissions"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	IsActive    pgtype.Bool        `json:"is_active"`
+	LastUsedAt  pgtype.Timestamptz `json:"last_used_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Scan implements the Scanner interface.
-func (ns *NullOtpPurpose) Scan(value interface{}) error {
-	if value == nil {
-		ns.OtpPurpose, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.OtpPurpose.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullOtpPurpose) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.OtpPurpose), nil
-}
-
-type Kyc struct {
-	ID                   uuid.UUID `json:"id"`
-	UserID               uuid.UUID `json:"user_id"`
-	FaceVerification     bool      `json:"face_verification"`
-	IdentityVerification bool      `json:"identity_verification"`
-	VerificationType     string    `json:"verification_type"`
-	VerificationNumber   string    `json:"verification_number"`
-	VerificationStatus   string    `json:"verification_status"`
-	UpdatedAt            time.Time `json:"updated_at"`
-	CreatedAt            time.Time `json:"created_at"`
-}
-
-type OtpVerifications struct {
+type AuditLogs struct {
 	ID            uuid.UUID          `json:"id"`
 	UserID        pgtype.UUID        `json:"user_id"`
-	OtpCode       string             `json:"otp_code"`
-	HashedOtp     string             `json:"hashed_otp"`
-	Purpose       OtpPurpose         `json:"purpose"`
-	ContactMethod pgtype.Text        `json:"contact_method"`
-	AttemptsMade  int32              `json:"attempts_made"`
-	MaxAttempts   int32              `json:"max_attempts"`
-	IsVerified    bool               `json:"is_verified"`
-	CreatedAt     time.Time          `json:"created_at"`
-	ExpiresAt     time.Time          `json:"expires_at"`
-	VerifiedAt    pgtype.Timestamptz `json:"verified_at"`
-	IpAddress     *netip.Addr        `json:"ip_address"`
+	CompanyID     pgtype.UUID        `json:"company_id"`
+	Action        string             `json:"action"`
+	EntityType    string             `json:"entity_type"`
+	EntityID      uuid.UUID          `json:"entity_id"`
+	PreviousState []byte             `json:"previous_state"`
+	NewState      []byte             `json:"new_state"`
+	IpAddress     pgtype.Text        `json:"ip_address"`
 	UserAgent     pgtype.Text        `json:"user_agent"`
-	DeviceID      pgtype.UUID        `json:"device_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type BankAccounts struct {
+	ID                 uuid.UUID          `json:"id"`
+	UserID             pgtype.UUID        `json:"user_id"`
+	CompanyID          pgtype.UUID        `json:"company_id"`
+	AccountNumber      string             `json:"account_number"`
+	AccountHolderName  string             `json:"account_holder_name"`
+	BankName           string             `json:"bank_name"`
+	BankCode           pgtype.Text        `json:"bank_code"`
+	RoutingNumber      pgtype.Text        `json:"routing_number"`
+	SwiftCode          pgtype.Text        `json:"swift_code"`
+	Iban               pgtype.Text        `json:"iban"`
+	AccountType        string             `json:"account_type"`
+	Currency           string             `json:"currency"`
+	Country            string             `json:"country"`
+	IsDefault          pgtype.Bool        `json:"is_default"`
+	IsVerified         pgtype.Bool        `json:"is_verified"`
+	VerificationMethod pgtype.Text        `json:"verification_method"`
+	VerifiedAt         pgtype.Timestamptz `json:"verified_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Companies struct {
+	ID                        uuid.UUID          `json:"id"`
+	OwnerID                   uuid.UUID          `json:"owner_id"`
+	CompanyName               string             `json:"company_name"`
+	CompanyEmail              pgtype.Text        `json:"company_email"`
+	CompanyPhone              pgtype.Text        `json:"company_phone"`
+	CompanySize               pgtype.Text        `json:"company_size"`
+	CompanyIndustry           pgtype.Text        `json:"company_industry"`
+	CompanyDescription        pgtype.Text        `json:"company_description"`
+	CompanyHeadquarters       pgtype.Text        `json:"company_headquarters"`
+	CompanyLogo               pgtype.Text        `json:"company_logo"`
+	CompanyWebsite            pgtype.Text        `json:"company_website"`
+	PrimaryContactName        pgtype.Text        `json:"primary_contact_name"`
+	PrimaryContactEmail       pgtype.Text        `json:"primary_contact_email"`
+	PrimaryContactPhone       pgtype.Text        `json:"primary_contact_phone"`
+	CompanyAddress            pgtype.Text        `json:"company_address"`
+	CompanyCity               pgtype.Text        `json:"company_city"`
+	CompanyPostalCode         pgtype.Text        `json:"company_postal_code"`
+	CompanyCountry            pgtype.Text        `json:"company_country"`
+	CompanyRegistrationNumber pgtype.Text        `json:"company_registration_number"`
+	RegistrationCountry       pgtype.Text        `json:"registration_country"`
+	TaxID                     pgtype.Text        `json:"tax_id"`
+	IncorporationDate         pgtype.Date        `json:"incorporation_date"`
+	AccountStatus             pgtype.Text        `json:"account_status"`
+	KybStatus                 pgtype.Text        `json:"kyb_status"`
+	KybVerifiedAt             pgtype.Timestamptz `json:"kyb_verified_at"`
+	KybVerificationMethod     pgtype.Text        `json:"kyb_verification_method"`
+	KybVerificationProvider   pgtype.Text        `json:"kyb_verification_provider"`
+	KybRejectionReason        pgtype.Text        `json:"kyb_rejection_reason"`
+	LegalEntityType           pgtype.Text        `json:"legal_entity_type"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyCountryKybStatus struct {
+	ID                 uuid.UUID          `json:"id"`
+	CompanyID          uuid.UUID          `json:"company_id"`
+	CountryID          uuid.UUID          `json:"country_id"`
+	VerificationStatus pgtype.Text        `json:"verification_status"`
+	VerificationLevel  pgtype.Text        `json:"verification_level"`
+	VerificationDate   pgtype.Timestamptz `json:"verification_date"`
+	ExpiryDate         pgtype.Timestamptz `json:"expiry_date"`
+	RejectionReason    pgtype.Text        `json:"rejection_reason"`
+	Notes              pgtype.Text        `json:"notes"`
+	RiskRating         pgtype.Text        `json:"risk_rating"`
+	RestrictedFeatures []byte             `json:"restricted_features"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyEmployees struct {
+	ID               uuid.UUID          `json:"id"`
+	CompanyID        uuid.UUID          `json:"company_id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	EmployeeID       pgtype.Text        `json:"employee_id"`
+	Department       pgtype.Text        `json:"department"`
+	Position         pgtype.Text        `json:"position"`
+	EmploymentStatus pgtype.Text        `json:"employment_status"`
+	EmploymentType   pgtype.Text        `json:"employment_type"`
+	StartDate        pgtype.Date        `json:"start_date"`
+	EndDate          pgtype.Date        `json:"end_date"`
+	ManagerID        pgtype.UUID        `json:"manager_id"`
+	SalaryAmount     pgtype.Numeric     `json:"salary_amount"`
+	SalaryCurrency   pgtype.Text        `json:"salary_currency"`
+	SalaryFrequency  pgtype.Text        `json:"salary_frequency"`
+	HourlyRate       pgtype.Numeric     `json:"hourly_rate"`
+	PaymentMethod    pgtype.Text        `json:"payment_method"`
+	PaymentSplit     []byte             `json:"payment_split"`
+	TaxInformation   []byte             `json:"tax_information"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyFeatureFlags struct {
+	ID        uuid.UUID          `json:"id"`
+	CompanyID uuid.UUID          `json:"company_id"`
+	FlagKey   string             `json:"flag_key"`
+	IsEnabled bool               `json:"is_enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanySettings struct {
+	ID           uuid.UUID          `json:"id"`
+	CompanyID    uuid.UUID          `json:"company_id"`
+	SettingKey   string             `json:"setting_key"`
+	SettingValue pgtype.Text        `json:"setting_value"`
+	DataType     string             `json:"data_type"`
+	Description  pgtype.Text        `json:"description"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyStaffProfiles struct {
+	ID             uuid.UUID          `json:"id"`
+	FirstName      pgtype.Text        `json:"first_name"`
+	LastName       pgtype.Text        `json:"last_name"`
+	ProfilePicture pgtype.Text        `json:"profile_picture"`
+	PhoneNumber    pgtype.Text        `json:"phone_number"`
+	Email          pgtype.Text        `json:"email"`
+	Department     pgtype.Text        `json:"department"`
+	JobTitle       pgtype.Text        `json:"job_title"`
+	ReportsTo      pgtype.UUID        `json:"reports_to"`
+	HireDate       pgtype.Date        `json:"hire_date"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyUsers struct {
+	ID                       uuid.UUID          `json:"id"`
+	CompanyID                uuid.UUID          `json:"company_id"`
+	UserID                   uuid.UUID          `json:"user_id"`
+	Role                     string             `json:"role"`
+	Department               pgtype.Text        `json:"department"`
+	JobTitle                 pgtype.Text        `json:"job_title"`
+	IsAdministrator          pgtype.Bool        `json:"is_administrator"`
+	CanManagePayroll         pgtype.Bool        `json:"can_manage_payroll"`
+	CanManageInvoices        pgtype.Bool        `json:"can_manage_invoices"`
+	CanManageEmployees       pgtype.Bool        `json:"can_manage_employees"`
+	CanManageCompanySettings pgtype.Bool        `json:"can_manage_company_settings"`
+	CanManageBankAccounts    pgtype.Bool        `json:"can_manage_bank_accounts"`
+	CanManageWallets         pgtype.Bool        `json:"can_manage_wallets"`
+	Permissions              []byte             `json:"permissions"`
+	IsActive                 pgtype.Bool        `json:"is_active"`
+	AddedBy                  pgtype.UUID        `json:"added_by"`
+	CreatedAt                pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
+}
+
+type CompanyWallets struct {
+	ID                uuid.UUID          `json:"id"`
+	CompanyID         uuid.UUID          `json:"company_id"`
+	WalletAddress     string             `json:"wallet_address"`
+	WalletType        string             `json:"wallet_type"`
+	ChainID           int32              `json:"chain_id"`
+	IsDefault         pgtype.Bool        `json:"is_default"`
+	MultisigConfig    []byte             `json:"multisig_config"`
+	RequiredApprovals pgtype.Int4        `json:"required_approvals"`
+	WalletName        pgtype.Text        `json:"wallet_name"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ComplianceRules struct {
+	ID                  uuid.UUID          `json:"id"`
+	CountryID           uuid.UUID          `json:"country_id"`
+	RuleType            string             `json:"rule_type"`
+	EntityType          string             `json:"entity_type"`
+	ThresholdAmount     pgtype.Numeric     `json:"threshold_amount"`
+	ThresholdCurrency   pgtype.Text        `json:"threshold_currency"`
+	RuleDescription     pgtype.Text        `json:"rule_description"`
+	RegulatoryReference pgtype.Text        `json:"regulatory_reference"`
+	ActionRequired      pgtype.Text        `json:"action_required"`
+	IsActive            pgtype.Bool        `json:"is_active"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ContractTemplates struct {
+	ID              uuid.UUID          `json:"id"`
+	CreatorID       uuid.UUID          `json:"creator_id"`
+	CompanyID       pgtype.UUID        `json:"company_id"`
+	Name            string             `json:"name"`
+	Description     pgtype.Text        `json:"description"`
+	TemplateType    string             `json:"template_type"`
+	TemplateContent []byte             `json:"template_content"`
+	IsPublic        pgtype.Bool        `json:"is_public"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Contracts struct {
+	ID                   uuid.UUID          `json:"id"`
+	TemplateID           pgtype.UUID        `json:"template_id"`
+	CompanyID            uuid.UUID          `json:"company_id"`
+	EmployeeID           pgtype.UUID        `json:"employee_id"`
+	FreelancerID         pgtype.UUID        `json:"freelancer_id"`
+	ContractTitle        string             `json:"contract_title"`
+	ContractType         string             `json:"contract_type"`
+	StartDate            pgtype.Date        `json:"start_date"`
+	EndDate              pgtype.Date        `json:"end_date"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentTerms         []byte             `json:"payment_terms"`
+	ContractDocumentUrl  pgtype.Text        `json:"contract_document_url"`
+	IpfsHash             pgtype.Text        `json:"ipfs_hash"`
+	SmartContractAddress pgtype.Text        `json:"smart_contract_address"`
+	ChainID              pgtype.Int4        `json:"chain_id"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ExchangeRates struct {
+	ID            uuid.UUID          `json:"id"`
+	BaseCurrency  string             `json:"base_currency"`
+	QuoteCurrency string             `json:"quote_currency"`
+	Rate          decimal.Decimal    `json:"rate"`
+	Source        string             `json:"source"`
+	Timestamp     time.Time          `json:"timestamp"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type ExpenseCategories struct {
+	ID          uuid.UUID          `json:"id"`
+	CompanyID   uuid.UUID          `json:"company_id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	IsActive    pgtype.Bool        `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Expenses struct {
+	ID                   uuid.UUID          `json:"id"`
+	UserID               uuid.UUID          `json:"user_id"`
+	CompanyID            uuid.UUID          `json:"company_id"`
+	CategoryID           uuid.UUID          `json:"category_id"`
+	Amount               decimal.Decimal    `json:"amount"`
+	Currency             string             `json:"currency"`
+	ExpenseDate          pgtype.Date        `json:"expense_date"`
+	Description          pgtype.Text        `json:"description"`
+	ReceiptUrl           pgtype.Text        `json:"receipt_url"`
+	IpfsHash             pgtype.Text        `json:"ipfs_hash"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentTransactionID pgtype.UUID        `json:"payment_transaction_id"`
+	ApprovedBy           pgtype.UUID        `json:"approved_by"`
+	ApprovedAt           pgtype.Timestamptz `json:"approved_at"`
+	RejectedReason       pgtype.Text        `json:"rejected_reason"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FeatureFlags struct {
+	ID                uuid.UUID          `json:"id"`
+	FlagKey           string             `json:"flag_key"`
+	Description       pgtype.Text        `json:"description"`
+	IsEnabled         pgtype.Bool        `json:"is_enabled"`
+	RolloutPercentage pgtype.Int4        `json:"rollout_percentage"`
+	Conditions        []byte             `json:"conditions"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FiatTransactions struct {
+	ID                   uuid.UUID          `json:"id"`
+	BankAccountID        uuid.UUID          `json:"bank_account_id"`
+	TransactionReference string             `json:"transaction_reference"`
+	TransactionType      string             `json:"transaction_type"`
+	Amount               decimal.Decimal    `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentProvider      pgtype.Text        `json:"payment_provider"`
+	PaymentMethod        pgtype.Text        `json:"payment_method"`
+	ProviderReference    pgtype.Text        `json:"provider_reference"`
+	ProviderFee          pgtype.Numeric     `json:"provider_fee"`
+	ReferenceType        pgtype.Text        `json:"reference_type"`
+	ReferenceID          pgtype.UUID        `json:"reference_id"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IntegrationConnections struct {
+	ID              uuid.UUID          `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	CompanyID       pgtype.UUID        `json:"company_id"`
+	IntegrationType string             `json:"integration_type"`
+	Provider        string             `json:"provider"`
+	AccessToken     pgtype.Text        `json:"access_token"`
+	RefreshToken    pgtype.Text        `json:"refresh_token"`
+	TokenExpiresAt  pgtype.Timestamptz `json:"token_expires_at"`
+	ConnectionData  []byte             `json:"connection_data"`
+	IsActive        pgtype.Bool        `json:"is_active"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type InvoiceItems struct {
+	ID                 uuid.UUID          `json:"id"`
+	InvoiceID          uuid.UUID          `json:"invoice_id"`
+	Description        string             `json:"description"`
+	Quantity           decimal.Decimal    `json:"quantity"`
+	UnitPrice          decimal.Decimal    `json:"unit_price"`
+	Amount             decimal.Decimal    `json:"amount"`
+	TaxRate            pgtype.Numeric     `json:"tax_rate"`
+	TaxAmount          pgtype.Numeric     `json:"tax_amount"`
+	DiscountPercentage pgtype.Numeric     `json:"discount_percentage"`
+	DiscountAmount     pgtype.Numeric     `json:"discount_amount"`
+	TotalAmount        decimal.Decimal    `json:"total_amount"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Invoices struct {
+	ID                     uuid.UUID          `json:"id"`
+	InvoiceNumber          string             `json:"invoice_number"`
+	IssuerID               uuid.UUID          `json:"issuer_id"`
+	RecipientID            uuid.UUID          `json:"recipient_id"`
+	Title                  string             `json:"title"`
+	Description            pgtype.Text        `json:"description"`
+	IssueDate              pgtype.Date        `json:"issue_date"`
+	DueDate                pgtype.Date        `json:"due_date"`
+	TotalAmount            decimal.Decimal    `json:"total_amount"`
+	Currency               string             `json:"currency"`
+	Status                 pgtype.Text        `json:"status"`
+	PaymentMethod          pgtype.Text        `json:"payment_method"`
+	RecipientWalletAddress pgtype.Text        `json:"recipient_wallet_address"`
+	RecipientBankAccountID pgtype.UUID        `json:"recipient_bank_account_id"`
+	TransactionHash        pgtype.Text        `json:"transaction_hash"`
+	PaymentDate            pgtype.Timestamptz `json:"payment_date"`
+	RejectionReason        pgtype.Text        `json:"rejection_reason"`
+	IpfsHash               pgtype.Text        `json:"ipfs_hash"`
+	SmartContractAddress   pgtype.Text        `json:"smart_contract_address"`
+	ChainID                pgtype.Int4        `json:"chain_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KybCountryRequirements struct {
+	ID                        uuid.UUID          `json:"id"`
+	CountryID                 uuid.UUID          `json:"country_id"`
+	DocumentType              string             `json:"document_type"`
+	BusinessType              pgtype.Text        `json:"business_type"`
+	IsRequired                pgtype.Bool        `json:"is_required"`
+	RequirementDescription    pgtype.Text        `json:"requirement_description"`
+	AcceptableDocumentFormats pgtype.Text        `json:"acceptable_document_formats"`
+	VerificationLevel         pgtype.Text        `json:"verification_level"`
+	AdditionalAttributes      []byte             `json:"additional_attributes"`
+	IsActive                  pgtype.Bool        `json:"is_active"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KybDocuments struct {
+	ID                 uuid.UUID          `json:"id"`
+	CompanyID          uuid.UUID          `json:"company_id"`
+	CountryID          uuid.UUID          `json:"country_id"`
+	DocumentType       string             `json:"document_type"`
+	DocumentNumber     pgtype.Text        `json:"document_number"`
+	DocumentCountry    pgtype.Text        `json:"document_country"`
+	IssueDate          pgtype.Date        `json:"issue_date"`
+	ExpiryDate         pgtype.Date        `json:"expiry_date"`
+	DocumentUrl        pgtype.Text        `json:"document_url"`
+	IpfsHash           pgtype.Text        `json:"ipfs_hash"`
+	VerificationStatus pgtype.Text        `json:"verification_status"`
+	VerificationLevel  pgtype.Text        `json:"verification_level"`
+	VerificationNotes  pgtype.Text        `json:"verification_notes"`
+	VerifiedBy         pgtype.UUID        `json:"verified_by"`
+	VerifiedAt         pgtype.Timestamptz `json:"verified_at"`
+	RejectionReason    pgtype.Text        `json:"rejection_reason"`
+	Metadata           []byte             `json:"metadata"`
+	MeetsRequirements  pgtype.Bool        `json:"meets_requirements"`
+	RequirementID      pgtype.UUID        `json:"requirement_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KybVerificationAttempts struct {
+	ID                    uuid.UUID          `json:"id"`
+	CompanyID             uuid.UUID          `json:"company_id"`
+	VerificationProvider  string             `json:"verification_provider"`
+	VerificationReference pgtype.Text        `json:"verification_reference"`
+	VerificationStatus    pgtype.Text        `json:"verification_status"`
+	VerificationResult    pgtype.Text        `json:"verification_result"`
+	ResponseData          []byte             `json:"response_data"`
+	ErrorMessage          pgtype.Text        `json:"error_message"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KycCountryRequirements struct {
+	ID                        uuid.UUID          `json:"id"`
+	CountryID                 uuid.UUID          `json:"country_id"`
+	DocumentType              string             `json:"document_type"`
+	IsRequired                pgtype.Bool        `json:"is_required"`
+	RequirementDescription    pgtype.Text        `json:"requirement_description"`
+	AcceptableDocumentFormats pgtype.Text        `json:"acceptable_document_formats"`
+	VerificationLevel         pgtype.Text        `json:"verification_level"`
+	AdditionalAttributes      []byte             `json:"additional_attributes"`
+	IsActive                  pgtype.Bool        `json:"is_active"`
+	CreatedAt                 pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KycDocuments struct {
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
+	CountryID          uuid.UUID          `json:"country_id"`
+	DocumentType       string             `json:"document_type"`
+	DocumentNumber     pgtype.Text        `json:"document_number"`
+	DocumentCountry    pgtype.Text        `json:"document_country"`
+	IssueDate          pgtype.Date        `json:"issue_date"`
+	ExpiryDate         pgtype.Date        `json:"expiry_date"`
+	DocumentUrl        pgtype.Text        `json:"document_url"`
+	IpfsHash           pgtype.Text        `json:"ipfs_hash"`
+	VerificationStatus pgtype.Text        `json:"verification_status"`
+	VerificationLevel  pgtype.Text        `json:"verification_level"`
+	VerificationNotes  pgtype.Text        `json:"verification_notes"`
+	VerifiedBy         pgtype.UUID        `json:"verified_by"`
+	VerifiedAt         pgtype.Timestamptz `json:"verified_at"`
+	RejectionReason    pgtype.Text        `json:"rejection_reason"`
+	Metadata           []byte             `json:"metadata"`
+	MeetsRequirements  pgtype.Bool        `json:"meets_requirements"`
+	RequirementID      pgtype.UUID        `json:"requirement_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type KycVerificationAttempts struct {
+	ID                    uuid.UUID          `json:"id"`
+	UserID                uuid.UUID          `json:"user_id"`
+	VerificationProvider  string             `json:"verification_provider"`
+	VerificationReference pgtype.Text        `json:"verification_reference"`
+	VerificationStatus    pgtype.Text        `json:"verification_status"`
+	VerificationResult    pgtype.Text        `json:"verification_result"`
+	ResponseData          []byte             `json:"response_data"`
+	ErrorMessage          pgtype.Text        `json:"error_message"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type LeaveBalances struct {
+	ID              uuid.UUID          `json:"id"`
+	EmployeeID      uuid.UUID          `json:"employee_id"`
+	LeaveTypeID     uuid.UUID          `json:"leave_type_id"`
+	Balance         pgtype.Numeric     `json:"balance"`
+	Accrued         pgtype.Numeric     `json:"accrued"`
+	Used            pgtype.Numeric     `json:"used"`
+	LastAccrualDate pgtype.Date        `json:"last_accrual_date"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type LeaveRequests struct {
+	ID             uuid.UUID          `json:"id"`
+	EmployeeID     uuid.UUID          `json:"employee_id"`
+	LeaveTypeID    uuid.UUID          `json:"leave_type_id"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndDate        pgtype.Date        `json:"end_date"`
+	Days           decimal.Decimal    `json:"days"`
+	Reason         pgtype.Text        `json:"reason"`
+	Status         pgtype.Text        `json:"status"`
+	ApprovedBy     pgtype.UUID        `json:"approved_by"`
+	ApprovedAt     pgtype.Timestamptz `json:"approved_at"`
+	RejectedReason pgtype.Text        `json:"rejected_reason"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type LeaveTypes struct {
+	ID             uuid.UUID          `json:"id"`
+	CompanyID      uuid.UUID          `json:"company_id"`
+	Name           string             `json:"name"`
+	Description    pgtype.Text        `json:"description"`
+	IsPaid         pgtype.Bool        `json:"is_paid"`
+	AccrualRate    pgtype.Numeric     `json:"accrual_rate"`
+	AccrualPeriod  pgtype.Text        `json:"accrual_period"`
+	MaximumBalance pgtype.Numeric     `json:"maximum_balance"`
+	IsActive       pgtype.Bool        `json:"is_active"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type NotificationTemplates struct {
+	ID           uuid.UUID          `json:"id"`
+	TemplateName string             `json:"template_name"`
+	TemplateType string             `json:"template_type"`
+	Subject      pgtype.Text        `json:"subject"`
+	Content      string             `json:"content"`
+	Variables    []byte             `json:"variables"`
+	IsActive     pgtype.Bool        `json:"is_active"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Notifications struct {
+	ID               uuid.UUID          `json:"id"`
+	UserID           uuid.UUID          `json:"user_id"`
+	TemplateID       pgtype.UUID        `json:"template_id"`
+	NotificationType string             `json:"notification_type"`
+	Title            string             `json:"title"`
+	Content          string             `json:"content"`
+	ReferenceType    pgtype.Text        `json:"reference_type"`
+	ReferenceID      pgtype.UUID        `json:"reference_id"`
+	IsRead           pgtype.Bool        `json:"is_read"`
+	ReadAt           pgtype.Timestamptz `json:"read_at"`
+	DeliveryStatus   pgtype.Text        `json:"delivery_status"`
+	Priority         pgtype.Text        `json:"priority"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type PaymentRequests struct {
+	ID                     uuid.UUID          `json:"id"`
+	CreatorID              uuid.UUID          `json:"creator_id"`
+	RecipientID            pgtype.UUID        `json:"recipient_id"`
+	CompanyID              pgtype.UUID        `json:"company_id"`
+	RequestTitle           string             `json:"request_title"`
+	Description            pgtype.Text        `json:"description"`
+	Amount                 decimal.Decimal    `json:"amount"`
+	Currency               string             `json:"currency"`
+	Status                 pgtype.Text        `json:"status"`
+	ExpiryDate             pgtype.Timestamptz `json:"expiry_date"`
+	PaymentLink            pgtype.Text        `json:"payment_link"`
+	QrCodeUrl              pgtype.Text        `json:"qr_code_url"`
+	PaymentMethod          pgtype.Text        `json:"payment_method"`
+	RecipientWalletAddress pgtype.Text        `json:"recipient_wallet_address"`
+	RecipientBankAccountID pgtype.UUID        `json:"recipient_bank_account_id"`
+	TransactionHash        pgtype.Text        `json:"transaction_hash"`
+	PaidAt                 pgtype.Timestamptz `json:"paid_at"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PayrollItems struct {
+	ID                     uuid.UUID          `json:"id"`
+	PayrollID              uuid.UUID          `json:"payroll_id"`
+	EmployeeID             uuid.UUID          `json:"employee_id"`
+	BaseAmount             decimal.Decimal    `json:"base_amount"`
+	BaseCurrency           string             `json:"base_currency"`
+	PaymentAmount          decimal.Decimal    `json:"payment_amount"`
+	PaymentCurrency        string             `json:"payment_currency"`
+	ExchangeRate           pgtype.Numeric     `json:"exchange_rate"`
+	PaymentMethod          string             `json:"payment_method"`
+	PaymentSplit           []byte             `json:"payment_split"`
+	Status                 pgtype.Text        `json:"status"`
+	TransactionHash        pgtype.Text        `json:"transaction_hash"`
+	RecipientWalletAddress pgtype.Text        `json:"recipient_wallet_address"`
+	RecipientBankAccountID pgtype.UUID        `json:"recipient_bank_account_id"`
+	Notes                  pgtype.Text        `json:"notes"`
+	TimesheetID            pgtype.UUID        `json:"timesheet_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PayrollPeriods struct {
+	ID           uuid.UUID          `json:"id"`
+	CompanyID    uuid.UUID          `json:"company_id"`
+	PeriodName   string             `json:"period_name"`
+	Frequency    string             `json:"frequency"`
+	StartDate    pgtype.Date        `json:"start_date"`
+	EndDate      pgtype.Date        `json:"end_date"`
+	PaymentDate  pgtype.Date        `json:"payment_date"`
+	Status       pgtype.Text        `json:"status"`
+	IsRecurring  pgtype.Bool        `json:"is_recurring"`
+	NextPeriodID pgtype.UUID        `json:"next_period_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Payrolls struct {
+	ID                     uuid.UUID          `json:"id"`
+	CompanyID              uuid.UUID          `json:"company_id"`
+	PeriodID               uuid.UUID          `json:"period_id"`
+	Name                   string             `json:"name"`
+	Description            pgtype.Text        `json:"description"`
+	TotalAmount            pgtype.Numeric     `json:"total_amount"`
+	BaseCurrency           string             `json:"base_currency"`
+	Status                 pgtype.Text        `json:"status"`
+	ExecutionType          pgtype.Text        `json:"execution_type"`
+	ScheduledExecutionTime pgtype.Timestamptz `json:"scheduled_execution_time"`
+	ExecutedAt             pgtype.Timestamptz `json:"executed_at"`
+	SmartContractAddress   pgtype.Text        `json:"smart_contract_address"`
+	ChainID                pgtype.Int4        `json:"chain_id"`
+	TransactionHash        pgtype.Text        `json:"transaction_hash"`
+	CreatedBy              uuid.UUID          `json:"created_by"`
+	ApprovedBy             pgtype.UUID        `json:"approved_by"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Permissions struct {
+	ID            uuid.UUID          `json:"id"`
+	PermissionKey string             `json:"permission_key"`
+	Description   pgtype.Text        `json:"description"`
+	Category      string             `json:"category"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PersonalUsers struct {
+	ID                     uuid.UUID          `json:"id"`
+	FirstName              pgtype.Text        `json:"first_name"`
+	LastName               pgtype.Text        `json:"last_name"`
+	ProfilePicture         pgtype.Text        `json:"profile_picture"`
+	PhoneNumber            pgtype.Text        `json:"phone_number"`
+	PhoneNumberVerified    pgtype.Bool        `json:"phone_number_verified"`
+	PhoneNumberVerifiedAt  pgtype.Timestamptz `json:"phone_number_verified_at"`
+	Nationality            pgtype.Text        `json:"nationality"`
+	ResidentialCountry     pgtype.Text        `json:"residential_country"`
+	UserAddress            pgtype.Text        `json:"user_address"`
+	UserCity               pgtype.Text        `json:"user_city"`
+	UserPostalCode         pgtype.Text        `json:"user_postal_code"`
+	Gender                 pgtype.Text        `json:"gender"`
+	DateOfBirth            pgtype.Date        `json:"date_of_birth"`
+	JobRole                pgtype.Text        `json:"job_role"`
+	PersonalAccountType    pgtype.Text        `json:"personal_account_type"`
+	EmploymentType         pgtype.Text        `json:"employment_type"`
+	TaxID                  pgtype.Text        `json:"tax_id"`
+	DefaultPaymentCurrency pgtype.Text        `json:"default_payment_currency"`
+	DefaultPaymentMethod   pgtype.Text        `json:"default_payment_method"`
+	HourlyRate             pgtype.Numeric     `json:"hourly_rate"`
+	Specialization         pgtype.Text        `json:"specialization"`
+	KycStatus              pgtype.Text        `json:"kyc_status"`
+	KycVerifiedAt          pgtype.Timestamptz `json:"kyc_verified_at"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+}
+
+type RolePermissions struct {
+	ID           uuid.UUID          `json:"id"`
+	RoleID       uuid.UUID          `json:"role_id"`
+	PermissionID uuid.UUID          `json:"permission_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type Roles struct {
+	ID           uuid.UUID          `json:"id"`
+	CompanyID    pgtype.UUID        `json:"company_id"`
+	RoleName     string             `json:"role_name"`
+	Description  pgtype.Text        `json:"description"`
+	IsSystemRole pgtype.Bool        `json:"is_system_role"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type SecurityEvents struct {
-	ID        uuid.UUID        `json:"id"`
-	UserID    uuid.UUID        `json:"user_id"`
-	EventType string           `json:"event_type"`
-	IpAddress string           `json:"ip_address"`
-	UserAgent pgtype.Text      `json:"user_agent"`
-	Metadata  []byte           `json:"metadata"`
-	Timestamp pgtype.Timestamp `json:"timestamp"`
+	ID        uuid.UUID          `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	CompanyID pgtype.UUID        `json:"company_id"`
+	EventType string             `json:"event_type"`
+	Severity  string             `json:"severity"`
+	IpAddress pgtype.Text        `json:"ip_address"`
+	UserAgent pgtype.Text        `json:"user_agent"`
+	Metadata  []byte             `json:"metadata"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Sessions struct {
-	ID               uuid.UUID        `json:"id"`
-	UserID           uuid.UUID        `json:"user_id"`
-	RefreshToken     string           `json:"refresh_token"`
-	UserAgent        string           `json:"user_agent"`
-	LastUsedAt       pgtype.Timestamp `json:"last_used_at"`
-	WebOauthClientID pgtype.Text      `json:"web_oauth_client_id"`
-	OauthAccessToken pgtype.Text      `json:"oauth_access_token"`
-	OauthIDToken     pgtype.Text      `json:"oauth_id_token"`
-	UserLoginType    string           `json:"user_login_type"`
-	MfaEnabled       bool             `json:"mfa_enabled"`
-	ClientIp         string           `json:"client_ip"`
-	IsBlocked        bool             `json:"is_blocked"`
-	ExpiresAt        pgtype.Timestamp `json:"expires_at"`
-	CreatedAt        pgtype.Timestamp `json:"created_at"`
+	ID               uuid.UUID          `json:"id"`
+	UserID           uuid.UUID          `json:"user_id"`
+	RefreshToken     pgtype.Text        `json:"refresh_token"`
+	UserAgent        pgtype.Text        `json:"user_agent"`
+	ClientIp         pgtype.Text        `json:"client_ip"`
+	LastUsedAt       pgtype.Timestamptz `json:"last_used_at"`
+	WebOauthClientID pgtype.Text        `json:"web_oauth_client_id"`
+	OauthAccessToken pgtype.Text        `json:"oauth_access_token"`
+	OauthIDToken     pgtype.Text        `json:"oauth_id_token"`
+	UserLoginType    pgtype.Text        `json:"user_login_type"`
+	MfaVerified      pgtype.Bool        `json:"mfa_verified"`
+	IsBlocked        pgtype.Bool        `json:"is_blocked"`
+	ExpiresAt        pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
-type Transactions struct {
-	ID     uuid.UUID `json:"id"`
-	UserID uuid.UUID `json:"user_id"`
-	TxHash string    `json:"tx_hash"`
-	TransactionPinHash string `json:"transaction_pin_hash"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+type SupportedCountries struct {
+	ID                  uuid.UUID          `json:"id"`
+	CountryCode         string             `json:"country_code"`
+	CountryName         string             `json:"country_name"`
+	Region              pgtype.Text        `json:"region"`
+	CurrencyCode        pgtype.Text        `json:"currency_code"`
+	CurrencySymbol      pgtype.Text        `json:"currency_symbol"`
+	IsActive            pgtype.Bool        `json:"is_active"`
+	IsHighRisk          pgtype.Bool        `json:"is_high_risk"`
+	RequiresEnhancedKyc pgtype.Bool        `json:"requires_enhanced_kyc"`
+	RequiresEnhancedKyb pgtype.Bool        `json:"requires_enhanced_kyb"`
+	Timezone            pgtype.Text        `json:"timezone"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
-type UserDeviceTokens struct {
+type SupportedNetworks struct {
+	ID               uuid.UUID          `json:"id"`
+	Name             string             `json:"name"`
+	ChainID          int32              `json:"chain_id"`
+	NetworkType      string             `json:"network_type"`
+	CurrencySymbol   string             `json:"currency_symbol"`
+	BlockExplorerUrl pgtype.Text        `json:"block_explorer_url"`
+	RpcUrl           pgtype.Text        `json:"rpc_url"`
+	IsEvmCompatible  pgtype.Bool        `json:"is_evm_compatible"`
+	IsActive         pgtype.Bool        `json:"is_active"`
+	TransactionSpeed pgtype.Text        `json:"transaction_speed"`
+	AverageBlockTime pgtype.Int4        `json:"average_block_time"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SupportedTokens struct {
+	ID              uuid.UUID          `json:"id"`
+	NetworkID       uuid.UUID          `json:"network_id"`
+	Name            string             `json:"name"`
+	Symbol          string             `json:"symbol"`
+	Decimals        int32              `json:"decimals"`
+	ContractAddress pgtype.Text        `json:"contract_address"`
+	TokenType       string             `json:"token_type"`
+	LogoUrl         pgtype.Text        `json:"logo_url"`
+	IsStablecoin    pgtype.Bool        `json:"is_stablecoin"`
+	IsActive        pgtype.Bool        `json:"is_active"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type SystemSettings struct {
+	ID           uuid.UUID          `json:"id"`
+	SettingKey   string             `json:"setting_key"`
+	SettingValue pgtype.Text        `json:"setting_value"`
+	DataType     string             `json:"data_type"`
+	Description  pgtype.Text        `json:"description"`
+	IsSensitive  pgtype.Bool        `json:"is_sensitive"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TaxCalculations struct {
+	ID              uuid.UUID          `json:"id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	CompanyID       pgtype.UUID        `json:"company_id"`
+	ReferenceType   string             `json:"reference_type"`
+	ReferenceID     uuid.UUID          `json:"reference_id"`
+	TaxRateID       uuid.UUID          `json:"tax_rate_id"`
+	TaxableAmount   decimal.Decimal    `json:"taxable_amount"`
+	TaxAmount       decimal.Decimal    `json:"tax_amount"`
+	CalculationDate pgtype.Date        `json:"calculation_date"`
+	TaxPeriod       string             `json:"tax_period"`
+	Status          pgtype.Text        `json:"status"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TaxDocuments struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	CompanyID    pgtype.UUID        `json:"company_id"`
+	CountryID    uuid.UUID          `json:"country_id"`
+	DocumentType string             `json:"document_type"`
+	TaxYear      int32              `json:"tax_year"`
+	DocumentUrl  pgtype.Text        `json:"document_url"`
+	IpfsHash     pgtype.Text        `json:"ipfs_hash"`
+	Status       pgtype.Text        `json:"status"`
+	ExpiresAt    pgtype.Date        `json:"expires_at"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TaxRates struct {
+	ID            uuid.UUID          `json:"id"`
+	CountryID     uuid.UUID          `json:"country_id"`
+	Region        pgtype.Text        `json:"region"`
+	TaxType       string             `json:"tax_type"`
+	Rate          decimal.Decimal    `json:"rate"`
+	EffectiveDate pgtype.Date        `json:"effective_date"`
+	ExpiryDate    pgtype.Date        `json:"expiry_date"`
+	Description   pgtype.Text        `json:"description"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+type TimesheetEntries struct {
+	ID          uuid.UUID          `json:"id"`
+	TimesheetID uuid.UUID          `json:"timesheet_id"`
+	Date        pgtype.Date        `json:"date"`
+	StartTime   pgtype.Time        `json:"start_time"`
+	EndTime     pgtype.Time        `json:"end_time"`
+	Hours       decimal.Decimal    `json:"hours"`
+	IsBillable  pgtype.Bool        `json:"is_billable"`
+	IsOvertime  pgtype.Bool        `json:"is_overtime"`
+	Project     pgtype.Text        `json:"project"`
+	Task        pgtype.Text        `json:"task"`
+	Description pgtype.Text        `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Timesheets struct {
+	ID              uuid.UUID          `json:"id"`
+	CompanyID       uuid.UUID          `json:"company_id"`
+	EmployeeID      uuid.UUID          `json:"employee_id"`
+	PeriodID        pgtype.UUID        `json:"period_id"`
+	Status          pgtype.Text        `json:"status"`
+	TotalHours      pgtype.Numeric     `json:"total_hours"`
+	BillableHours   pgtype.Numeric     `json:"billable_hours"`
+	OvertimeHours   pgtype.Numeric     `json:"overtime_hours"`
+	HourlyRate      pgtype.Numeric     `json:"hourly_rate"`
+	RateCurrency    pgtype.Text        `json:"rate_currency"`
+	TotalAmount     pgtype.Numeric     `json:"total_amount"`
+	SubmittedAt     pgtype.Timestamptz `json:"submitted_at"`
+	ApprovedAt      pgtype.Timestamptz `json:"approved_at"`
+	ApprovedBy      pgtype.UUID        `json:"approved_by"`
+	RejectionReason pgtype.Text        `json:"rejection_reason"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserCountryKycStatus struct {
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
+	CountryID          uuid.UUID          `json:"country_id"`
+	VerificationStatus pgtype.Text        `json:"verification_status"`
+	VerificationLevel  pgtype.Text        `json:"verification_level"`
+	VerificationDate   pgtype.Timestamptz `json:"verification_date"`
+	ExpiryDate         pgtype.Timestamptz `json:"expiry_date"`
+	RejectionReason    pgtype.Text        `json:"rejection_reason"`
+	Notes              pgtype.Text        `json:"notes"`
+	RiskRating         pgtype.Text        `json:"risk_rating"`
+	RestrictedFeatures []byte             `json:"restricted_features"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserDevices struct {
 	ID                    uuid.UUID          `json:"id"`
 	UserID                uuid.UUID          `json:"user_id"`
-	DeviceToken           string             `json:"device_token"`
-	Platform              string             `json:"platform"`
+	DeviceToken           pgtype.Text        `json:"device_token"`
+	Platform              pgtype.Text        `json:"platform"`
 	DeviceType            pgtype.Text        `json:"device_type"`
 	DeviceModel           pgtype.Text        `json:"device_model"`
 	OsName                pgtype.Text        `json:"os_name"`
 	OsVersion             pgtype.Text        `json:"os_version"`
 	PushNotificationToken pgtype.Text        `json:"push_notification_token"`
-	IsActive              bool               `json:"is_active"`
-	IsVerified            bool               `json:"is_verified"`
+	IsActive              pgtype.Bool        `json:"is_active"`
+	IsVerified            pgtype.Bool        `json:"is_verified"`
 	LastUsedAt            pgtype.Timestamptz `json:"last_used_at"`
-	FirstRegisteredAt     time.Time          `json:"first_registered_at"`
 	AppVersion            pgtype.Text        `json:"app_version"`
 	ClientIp              pgtype.Text        `json:"client_ip"`
 	ExpiresAt             pgtype.Timestamptz `json:"expires_at"`
-	IsRevoked             bool               `json:"is_revoked"`
+	IsRevoked             pgtype.Bool        `json:"is_revoked"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserFeatureFlags struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	FlagKey   string             `json:"flag_key"`
+	IsEnabled bool               `json:"is_enabled"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserRoles struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    uuid.UUID          `json:"user_id"`
+	RoleID    uuid.UUID          `json:"role_id"`
+	CompanyID pgtype.UUID        `json:"company_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type UserSettings struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       uuid.UUID          `json:"user_id"`
+	SettingKey   string             `json:"setting_key"`
+	SettingValue pgtype.Text        `json:"setting_value"`
+	DataType     string             `json:"data_type"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type UserWallets struct {
-	ID        uuid.UUID        `json:"id"`
-	UserID    uuid.UUID        `json:"user_id"`
-	Address   string           `json:"address"`
-	Type      string           `json:"type"`
-	Chain     string           `json:"chain"`
-	IsDefault bool             `json:"is_default"`
-	CreatedAt pgtype.Timestamp `json:"created_at"`
-	UpdatedAt pgtype.Timestamp `json:"updated_at"`
+	ID                 uuid.UUID          `json:"id"`
+	UserID             uuid.UUID          `json:"user_id"`
+	WalletAddress      string             `json:"wallet_address"`
+	WalletType         string             `json:"wallet_type"`
+	ChainID            int32              `json:"chain_id"`
+	IsDefault          pgtype.Bool        `json:"is_default"`
+	IsVerified         pgtype.Bool        `json:"is_verified"`
+	VerificationMethod pgtype.Text        `json:"verification_method"`
+	VerifiedAt         pgtype.Timestamptz `json:"verified_at"`
+	Nickname           pgtype.Text        `json:"nickname"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Users struct {
-	ID             uuid.UUID   `json:"id"`
-	Email          string      `json:"email"`
-	PasswordHash   pgtype.Text `json:"password_hash"`
-	ProfilePicture pgtype.Text `json:"profile_picture"`
-	// business, personal
-	AccountType string      `json:"account_type"`
-	Gender      pgtype.Text `json:"gender"`
-	// contractor, freelancer, employee
-	PersonalAccountType   string             `json:"personal_account_type"`
-	PhoneNumber           pgtype.Text        `json:"phone_number"`
-	PhoneNumberVerified   pgtype.Bool        `json:"phone_number_verified"`
-	PhoneNumberVerifiedAt pgtype.Timestamptz `json:"phone_number_verified_at"`
-	FirstName             string             `json:"first_name"`
-	LastName              string             `json:"last_name"`
-	Nationality           string             `json:"nationality"`
-	ResidentialCountry    pgtype.Text        `json:"residential_country"`
-	JobRole               pgtype.Text        `json:"job_role"`
-	CompanyName           pgtype.Text        `json:"company_name"`
-	CompanySize           pgtype.Text        `json:"company_size"`
-	CompanyIndustry       pgtype.Text        `json:"company_industry"`
-	CompanyDescription    pgtype.Text        `json:"company_description"`
-	CompanyHeadquarters   pgtype.Text        `json:"company_headquarters"`
-	UserAddress           pgtype.Text        `json:"user_address"`
-	UserCity              pgtype.Text        `json:"user_city"`
-	UserPostalCode        pgtype.Text        `json:"user_postal_code"`
-	EmployeeType          pgtype.Text        `json:"employee_type"`
-	AuthProvider          pgtype.Text        `json:"auth_provider"`
-	ProviderID            string             `json:"provider_id"`
-	CompanyWebsite        pgtype.Text        `json:"company_website"`
-	EmploymentType        pgtype.Text        `json:"employment_type"`
-	CreatedAt             time.Time          `json:"created_at"`
-	UpdatedAt             time.Time          `json:"updated_at"`
+	ID               uuid.UUID          `json:"id"`
+	Email            string             `json:"email"`
+	PasswordHash     pgtype.Text        `json:"password_hash"`
+	AuthProvider     pgtype.Text        `json:"auth_provider"`
+	ProviderID       pgtype.Text        `json:"provider_id"`
+	EmailVerified    pgtype.Bool        `json:"email_verified"`
+	EmailVerifiedAt  pgtype.Timestamptz `json:"email_verified_at"`
+	AccountType      string             `json:"account_type"`
+	AccountStatus    pgtype.Text        `json:"account_status"`
+	TwoFactorEnabled pgtype.Bool        `json:"two_factor_enabled"`
+	TwoFactorMethod  pgtype.Text        `json:"two_factor_method"`
+	UserLoginType    pgtype.Text        `json:"user_login_type"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	LastLoginAt      pgtype.Timestamptz `json:"last_login_at"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type Waitlist struct {
@@ -206,4 +976,39 @@ type Waitlist struct {
 	Metadata       []byte             `json:"metadata"`
 	CreatedAt      time.Time          `json:"created_at"`
 	UpdatedAt      time.Time          `json:"updated_at"`
+}
+
+type WalletTransactions struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Webhooks struct {
+	ID          uuid.UUID          `json:"id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	CompanyID   pgtype.UUID        `json:"company_id"`
+	WebhookUrl  string             `json:"webhook_url"`
+	EventTypes  []string           `json:"event_types"`
+	SecretKey   string             `json:"secret_key"`
+	Description pgtype.Text        `json:"description"`
+	IsActive    pgtype.Bool        `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

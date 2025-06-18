@@ -110,7 +110,7 @@ require (
 
 require (
 	github.com/ethereum/go-ethereum v1.15.11
-	github.com/go-redis/redis/v8 v8.11.5
+	github.com/shopspring/decimal v1.4.0
 )
 
 require (
@@ -123,7 +123,6 @@ require (
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect

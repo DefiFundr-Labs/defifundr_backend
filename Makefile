@@ -40,7 +40,7 @@ dockerlogs:
 	docker logs defi
 
 dropdb:
-	docker exec -it defi dropdb $(DB_NAME) 
+	docker exec -it defi dropdb $(DB_NAME)
 
 # Migration commands (using goose)
 migrate-create:

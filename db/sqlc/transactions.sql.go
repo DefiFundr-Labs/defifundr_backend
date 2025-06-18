@@ -7,108 +7,735 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
-const deleteTransaction = `-- name: DeleteTransaction :exec
-DELETE FROM transactions
-WHERE id = $1
+const createExchangeRate = `-- name: CreateExchangeRate :one
+INSERT INTO exchange_rates (
+  id,
+  base_currency,
+  quote_currency,
+  rate,
+  source,
+  timestamp,
+  created_at
+) VALUES (
+  COALESCE($1, uuid_generate_v4()),
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  COALESCE($7, NOW())
+) RETURNING id, base_currency, quote_currency, rate, source, timestamp, created_at
 `
 
-// Permanently deletes a transaction record
-func (q *Queries) DeleteTransaction(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteTransaction, id)
-	return err
+type CreateExchangeRateParams struct {
+	ID            interface{}     `json:"id"`
+	BaseCurrency  string          `json:"base_currency"`
+	QuoteCurrency string          `json:"quote_currency"`
+	Rate          decimal.Decimal `json:"rate"`
+	Source        string          `json:"source"`
+	Timestamp     time.Time       `json:"timestamp"`
+	CreatedAt     interface{}     `json:"created_at"`
 }
 
-const deleteTransactionsByUserID = `-- name: DeleteTransactionsByUserID :exec
-DELETE FROM transactions
-WHERE user_id = $1
+func (q *Queries) CreateExchangeRate(ctx context.Context, arg CreateExchangeRateParams) (ExchangeRates, error) {
+	row := q.db.QueryRow(ctx, createExchangeRate,
+		arg.ID,
+		arg.BaseCurrency,
+		arg.QuoteCurrency,
+		arg.Rate,
+		arg.Source,
+		arg.Timestamp,
+		arg.CreatedAt,
+	)
+	var i ExchangeRates
+	err := row.Scan(
+		&i.ID,
+		&i.BaseCurrency,
+		&i.QuoteCurrency,
+		&i.Rate,
+		&i.Source,
+		&i.Timestamp,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createFiatTransaction = `-- name: CreateFiatTransaction :one
+INSERT INTO fiat_transactions (
+  id,
+  bank_account_id,
+  transaction_reference,
+  transaction_type,
+  amount,
+  currency,
+  status,
+  payment_provider,
+  payment_method,
+  provider_reference,
+  provider_fee,
+  reference_type,
+  reference_id,
+  metadata,
+  created_at,
+  updated_at
+) VALUES (
+  COALESCE($1, uuid_generate_v4()),
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  COALESCE($7, 'pending'),
+  $8,
+  $9,
+  $10,
+  COALESCE($11, 0),
+  $12,
+  $13,
+  $14,
+  COALESCE($15, NOW()),
+  COALESCE($16, NOW())
+) RETURNING id, bank_account_id, transaction_reference, transaction_type, amount, currency, status, payment_provider, payment_method, provider_reference, provider_fee, reference_type, reference_id, metadata, created_at, updated_at
 `
 
-// Deletes all transactions for a specific user
-func (q *Queries) DeleteTransactionsByUserID(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteTransactionsByUserID, userID)
-	return err
+type CreateFiatTransactionParams struct {
+	ID                   interface{}     `json:"id"`
+	BankAccountID        uuid.UUID       `json:"bank_account_id"`
+	TransactionReference string          `json:"transaction_reference"`
+	TransactionType      string          `json:"transaction_type"`
+	Amount               decimal.Decimal `json:"amount"`
+	Currency             string          `json:"currency"`
+	Status               interface{}     `json:"status"`
+	PaymentProvider      pgtype.Text     `json:"payment_provider"`
+	PaymentMethod        pgtype.Text     `json:"payment_method"`
+	ProviderReference    pgtype.Text     `json:"provider_reference"`
+	ProviderFee          interface{}     `json:"provider_fee"`
+	ReferenceType        pgtype.Text     `json:"reference_type"`
+	ReferenceID          pgtype.UUID     `json:"reference_id"`
+	Metadata             []byte          `json:"metadata"`
+	CreatedAt            interface{}     `json:"created_at"`
+	UpdatedAt            interface{}     `json:"updated_at"`
 }
 
-const getTransactionByID = `-- name: GetTransactionByID :one
-SELECT id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at FROM transactions
-WHERE id = $1
+func (q *Queries) CreateFiatTransaction(ctx context.Context, arg CreateFiatTransactionParams) (FiatTransactions, error) {
+	row := q.db.QueryRow(ctx, createFiatTransaction,
+		arg.ID,
+		arg.BankAccountID,
+		arg.TransactionReference,
+		arg.TransactionType,
+		arg.Amount,
+		arg.Currency,
+		arg.Status,
+		arg.PaymentProvider,
+		arg.PaymentMethod,
+		arg.ProviderReference,
+		arg.ProviderFee,
+		arg.ReferenceType,
+		arg.ReferenceID,
+		arg.Metadata,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i FiatTransactions
+	err := row.Scan(
+		&i.ID,
+		&i.BankAccountID,
+		&i.TransactionReference,
+		&i.TransactionType,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PaymentProvider,
+		&i.PaymentMethod,
+		&i.ProviderReference,
+		&i.ProviderFee,
+		&i.ReferenceType,
+		&i.ReferenceID,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createWalletTransaction = `-- name: CreateWalletTransaction :one
+INSERT INTO wallet_transactions (
+  id,
+  wallet_address,
+  transaction_hash,
+  chain_id,
+  block_number,
+  from_address,
+  to_address,
+  token_address,
+  token_symbol,
+  amount,
+  transaction_type,
+  transaction_status,
+  gas_price,
+  gas_used,
+  transaction_fee,
+  reference_type,
+  reference_id,
+  created_at,
+  updated_at
+) VALUES (
+  COALESCE($1, uuid_generate_v4()),
+  $2,
+  $3,
+  $4,
+  $5,
+  $6,
+  $7,
+  $8,
+  $9,
+  $10,
+  $11,
+  COALESCE($12, 'pending'),
+  $13,
+  $14,
+  $15,
+  $16,
+  $17,
+  COALESCE($18, NOW()),
+  COALESCE($19, NOW())
+) RETURNING id, wallet_address, transaction_hash, chain_id, block_number, from_address, to_address, token_address, token_symbol, amount, transaction_type, transaction_status, gas_price, gas_used, transaction_fee, reference_type, reference_id, created_at, updated_at
+`
+
+type CreateWalletTransactionParams struct {
+	ID                interface{}     `json:"id"`
+	WalletAddress     string          `json:"wallet_address"`
+	TransactionHash   string          `json:"transaction_hash"`
+	ChainID           int32           `json:"chain_id"`
+	BlockNumber       pgtype.Int8     `json:"block_number"`
+	FromAddress       string          `json:"from_address"`
+	ToAddress         string          `json:"to_address"`
+	TokenAddress      pgtype.Text     `json:"token_address"`
+	TokenSymbol       pgtype.Text     `json:"token_symbol"`
+	Amount            decimal.Decimal `json:"amount"`
+	TransactionType   string          `json:"transaction_type"`
+	TransactionStatus interface{}     `json:"transaction_status"`
+	GasPrice          pgtype.Numeric  `json:"gas_price"`
+	GasUsed           pgtype.Int8     `json:"gas_used"`
+	TransactionFee    pgtype.Numeric  `json:"transaction_fee"`
+	ReferenceType     pgtype.Text     `json:"reference_type"`
+	ReferenceID       pgtype.UUID     `json:"reference_id"`
+	CreatedAt         interface{}     `json:"created_at"`
+	UpdatedAt         interface{}     `json:"updated_at"`
+}
+
+func (q *Queries) CreateWalletTransaction(ctx context.Context, arg CreateWalletTransactionParams) (WalletTransactions, error) {
+	row := q.db.QueryRow(ctx, createWalletTransaction,
+		arg.ID,
+		arg.WalletAddress,
+		arg.TransactionHash,
+		arg.ChainID,
+		arg.BlockNumber,
+		arg.FromAddress,
+		arg.ToAddress,
+		arg.TokenAddress,
+		arg.TokenSymbol,
+		arg.Amount,
+		arg.TransactionType,
+		arg.TransactionStatus,
+		arg.GasPrice,
+		arg.GasUsed,
+		arg.TransactionFee,
+		arg.ReferenceType,
+		arg.ReferenceID,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i WalletTransactions
+	err := row.Scan(
+		&i.ID,
+		&i.WalletAddress,
+		&i.TransactionHash,
+		&i.ChainID,
+		&i.BlockNumber,
+		&i.FromAddress,
+		&i.ToAddress,
+		&i.TokenAddress,
+		&i.TokenSymbol,
+		&i.Amount,
+		&i.TransactionType,
+		&i.TransactionStatus,
+		&i.GasPrice,
+		&i.GasUsed,
+		&i.TransactionFee,
+		&i.ReferenceType,
+		&i.ReferenceID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAllLatestExchangeRates = `-- name: GetAllLatestExchangeRates :many
+SELECT DISTINCT ON (base_currency, quote_currency) id, base_currency, quote_currency, rate, source, timestamp, created_at
+FROM exchange_rates 
+ORDER BY base_currency, quote_currency, timestamp DESC
+`
+
+func (q *Queries) GetAllLatestExchangeRates(ctx context.Context) ([]ExchangeRates, error) {
+	rows, err := q.db.Query(ctx, getAllLatestExchangeRates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExchangeRates{}
+	for rows.Next() {
+		var i ExchangeRates
+		if err := rows.Scan(
+			&i.ID,
+			&i.BaseCurrency,
+			&i.QuoteCurrency,
+			&i.Rate,
+			&i.Source,
+			&i.Timestamp,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCompanyFiatTransactions = `-- name: GetCompanyFiatTransactions :many
+SELECT ft.id, ft.bank_account_id, ft.transaction_reference, ft.transaction_type, ft.amount, ft.currency, ft.status, ft.payment_provider, ft.payment_method, ft.provider_reference, ft.provider_fee, ft.reference_type, ft.reference_id, ft.metadata, ft.created_at, ft.updated_at, ba.account_holder_name, ba.bank_name
+FROM fiat_transactions ft
+JOIN bank_accounts ba ON ft.bank_account_id = ba.id
+WHERE ba.company_id = $1
+ORDER BY ft.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type GetCompanyFiatTransactionsParams struct {
+	CompanyID pgtype.UUID `json:"company_id"`
+	OffsetVal int32       `json:"offset_val"`
+	LimitVal  int32       `json:"limit_val"`
+}
+
+type GetCompanyFiatTransactionsRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	BankAccountID        uuid.UUID          `json:"bank_account_id"`
+	TransactionReference string             `json:"transaction_reference"`
+	TransactionType      string             `json:"transaction_type"`
+	Amount               decimal.Decimal    `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentProvider      pgtype.Text        `json:"payment_provider"`
+	PaymentMethod        pgtype.Text        `json:"payment_method"`
+	ProviderReference    pgtype.Text        `json:"provider_reference"`
+	ProviderFee          pgtype.Numeric     `json:"provider_fee"`
+	ReferenceType        pgtype.Text        `json:"reference_type"`
+	ReferenceID          pgtype.UUID        `json:"reference_id"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	AccountHolderName    string             `json:"account_holder_name"`
+	BankName             string             `json:"bank_name"`
+}
+
+func (q *Queries) GetCompanyFiatTransactions(ctx context.Context, arg GetCompanyFiatTransactionsParams) ([]GetCompanyFiatTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getCompanyFiatTransactions, arg.CompanyID, arg.OffsetVal, arg.LimitVal)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCompanyFiatTransactionsRow{}
+	for rows.Next() {
+		var i GetCompanyFiatTransactionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BankAccountID,
+			&i.TransactionReference,
+			&i.TransactionType,
+			&i.Amount,
+			&i.Currency,
+			&i.Status,
+			&i.PaymentProvider,
+			&i.PaymentMethod,
+			&i.ProviderReference,
+			&i.ProviderFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AccountHolderName,
+			&i.BankName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCompanyTransactions = `-- name: GetCompanyTransactions :many
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+JOIN company_wallets cw ON wt.wallet_address = cw.wallet_address AND wt.chain_id = cw.chain_id
+WHERE cw.company_id = $1
+ORDER BY wt.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type GetCompanyTransactionsParams struct {
+	CompanyID uuid.UUID `json:"company_id"`
+	OffsetVal int32     `json:"offset_val"`
+	LimitVal  int32     `json:"limit_val"`
+}
+
+type GetCompanyTransactionsRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
+}
+
+func (q *Queries) GetCompanyTransactions(ctx context.Context, arg GetCompanyTransactionsParams) ([]GetCompanyTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getCompanyTransactions, arg.CompanyID, arg.OffsetVal, arg.LimitVal)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCompanyTransactionsRow{}
+	for rows.Next() {
+		var i GetCompanyTransactionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WalletAddress,
+			&i.TransactionHash,
+			&i.ChainID,
+			&i.BlockNumber,
+			&i.FromAddress,
+			&i.ToAddress,
+			&i.TokenAddress,
+			&i.TokenSymbol,
+			&i.Amount,
+			&i.TransactionType,
+			&i.TransactionStatus,
+			&i.GasPrice,
+			&i.GasUsed,
+			&i.TransactionFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.NetworkName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getExchangeRateHistory = `-- name: GetExchangeRateHistory :many
+SELECT id, base_currency, quote_currency, rate, source, timestamp, created_at FROM exchange_rates 
+WHERE base_currency = $1 
+  AND quote_currency = $2
+  AND timestamp >= $3
+  AND timestamp <= $4
+ORDER BY timestamp DESC
+`
+
+type GetExchangeRateHistoryParams struct {
+	BaseCurrency  string    `json:"base_currency"`
+	QuoteCurrency string    `json:"quote_currency"`
+	StartTime     time.Time `json:"start_time"`
+	EndTime       time.Time `json:"end_time"`
+}
+
+func (q *Queries) GetExchangeRateHistory(ctx context.Context, arg GetExchangeRateHistoryParams) ([]ExchangeRates, error) {
+	rows, err := q.db.Query(ctx, getExchangeRateHistory,
+		arg.BaseCurrency,
+		arg.QuoteCurrency,
+		arg.StartTime,
+		arg.EndTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ExchangeRates{}
+	for rows.Next() {
+		var i ExchangeRates
+		if err := rows.Scan(
+			&i.ID,
+			&i.BaseCurrency,
+			&i.QuoteCurrency,
+			&i.Rate,
+			&i.Source,
+			&i.Timestamp,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFiatTransactionByReference = `-- name: GetFiatTransactionByReference :one
+SELECT ft.id, ft.bank_account_id, ft.transaction_reference, ft.transaction_type, ft.amount, ft.currency, ft.status, ft.payment_provider, ft.payment_method, ft.provider_reference, ft.provider_fee, ft.reference_type, ft.reference_id, ft.metadata, ft.created_at, ft.updated_at, ba.account_holder_name, ba.bank_name
+FROM fiat_transactions ft
+JOIN bank_accounts ba ON ft.bank_account_id = ba.id
+WHERE ft.transaction_reference = $1
+`
+
+type GetFiatTransactionByReferenceRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	BankAccountID        uuid.UUID          `json:"bank_account_id"`
+	TransactionReference string             `json:"transaction_reference"`
+	TransactionType      string             `json:"transaction_type"`
+	Amount               decimal.Decimal    `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentProvider      pgtype.Text        `json:"payment_provider"`
+	PaymentMethod        pgtype.Text        `json:"payment_method"`
+	ProviderReference    pgtype.Text        `json:"provider_reference"`
+	ProviderFee          pgtype.Numeric     `json:"provider_fee"`
+	ReferenceType        pgtype.Text        `json:"reference_type"`
+	ReferenceID          pgtype.UUID        `json:"reference_id"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	AccountHolderName    string             `json:"account_holder_name"`
+	BankName             string             `json:"bank_name"`
+}
+
+func (q *Queries) GetFiatTransactionByReference(ctx context.Context, transactionReference string) (GetFiatTransactionByReferenceRow, error) {
+	row := q.db.QueryRow(ctx, getFiatTransactionByReference, transactionReference)
+	var i GetFiatTransactionByReferenceRow
+	err := row.Scan(
+		&i.ID,
+		&i.BankAccountID,
+		&i.TransactionReference,
+		&i.TransactionType,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PaymentProvider,
+		&i.PaymentMethod,
+		&i.ProviderReference,
+		&i.ProviderFee,
+		&i.ReferenceType,
+		&i.ReferenceID,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AccountHolderName,
+		&i.BankName,
+	)
+	return i, err
+}
+
+const getFiatTransactionsByBankAccount = `-- name: GetFiatTransactionsByBankAccount :many
+SELECT ft.id, ft.bank_account_id, ft.transaction_reference, ft.transaction_type, ft.amount, ft.currency, ft.status, ft.payment_provider, ft.payment_method, ft.provider_reference, ft.provider_fee, ft.reference_type, ft.reference_id, ft.metadata, ft.created_at, ft.updated_at, ba.account_holder_name, ba.bank_name
+FROM fiat_transactions ft
+JOIN bank_accounts ba ON ft.bank_account_id = ba.id
+WHERE ft.bank_account_id = $1
+ORDER BY ft.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type GetFiatTransactionsByBankAccountParams struct {
+	BankAccountID uuid.UUID `json:"bank_account_id"`
+	OffsetVal     int32     `json:"offset_val"`
+	LimitVal      int32     `json:"limit_val"`
+}
+
+type GetFiatTransactionsByBankAccountRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	BankAccountID        uuid.UUID          `json:"bank_account_id"`
+	TransactionReference string             `json:"transaction_reference"`
+	TransactionType      string             `json:"transaction_type"`
+	Amount               decimal.Decimal    `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentProvider      pgtype.Text        `json:"payment_provider"`
+	PaymentMethod        pgtype.Text        `json:"payment_method"`
+	ProviderReference    pgtype.Text        `json:"provider_reference"`
+	ProviderFee          pgtype.Numeric     `json:"provider_fee"`
+	ReferenceType        pgtype.Text        `json:"reference_type"`
+	ReferenceID          pgtype.UUID        `json:"reference_id"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	AccountHolderName    string             `json:"account_holder_name"`
+	BankName             string             `json:"bank_name"`
+}
+
+func (q *Queries) GetFiatTransactionsByBankAccount(ctx context.Context, arg GetFiatTransactionsByBankAccountParams) ([]GetFiatTransactionsByBankAccountRow, error) {
+	rows, err := q.db.Query(ctx, getFiatTransactionsByBankAccount, arg.BankAccountID, arg.OffsetVal, arg.LimitVal)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetFiatTransactionsByBankAccountRow{}
+	for rows.Next() {
+		var i GetFiatTransactionsByBankAccountRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BankAccountID,
+			&i.TransactionReference,
+			&i.TransactionType,
+			&i.Amount,
+			&i.Currency,
+			&i.Status,
+			&i.PaymentProvider,
+			&i.PaymentMethod,
+			&i.ProviderReference,
+			&i.ProviderFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AccountHolderName,
+			&i.BankName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getLatestExchangeRate = `-- name: GetLatestExchangeRate :one
+SELECT id, base_currency, quote_currency, rate, source, timestamp, created_at FROM exchange_rates 
+WHERE base_currency = $1 AND quote_currency = $2
+ORDER BY timestamp DESC
 LIMIT 1
 `
 
-// Retrieves a single transaction by its ID
-func (q *Queries) GetTransactionByID(ctx context.Context, id uuid.UUID) (Transactions, error) {
-	row := q.db.QueryRow(ctx, getTransactionByID, id)
-	var i Transactions
+type GetLatestExchangeRateParams struct {
+	BaseCurrency  string `json:"base_currency"`
+	QuoteCurrency string `json:"quote_currency"`
+}
+
+func (q *Queries) GetLatestExchangeRate(ctx context.Context, arg GetLatestExchangeRateParams) (ExchangeRates, error) {
+	row := q.db.QueryRow(ctx, getLatestExchangeRate, arg.BaseCurrency, arg.QuoteCurrency)
+	var i ExchangeRates
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
-		&i.TxHash,
-		&i.TransactionPinHash,
-		&i.Status,
+		&i.BaseCurrency,
+		&i.QuoteCurrency,
+		&i.Rate,
+		&i.Source,
+		&i.Timestamp,
 		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getTransactionByTxHash = `-- name: GetTransactionByTxHash :one
-SELECT id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at FROM transactions
-WHERE tx_hash = $1
-LIMIT 1
+const getPendingTransactions = `-- name: GetPendingTransactions :many
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+WHERE wt.transaction_status = 'pending'
+  AND ($1::uuid IS NULL OR wt.wallet_address IN (
+    SELECT wallet_address FROM user_wallets WHERE user_id = $1
+  ))
+ORDER BY wt.created_at DESC
 `
 
-// Retrieves a single transaction by its transaction hash
-func (q *Queries) GetTransactionByTxHash(ctx context.Context, txHash string) (Transactions, error) {
-	row := q.db.QueryRow(ctx, getTransactionByTxHash, txHash)
-	var i Transactions
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.TxHash,
-		&i.TransactionPinHash,
-		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+type GetPendingTransactionsRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
 }
 
-const getTransactionsByStatus = `-- name: GetTransactionsByStatus :many
-SELECT id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at FROM transactions
-WHERE status = $1
-ORDER BY created_at DESC
-LIMIT $2
-OFFSET $3
-`
-
-type GetTransactionsByStatusParams struct {
-	Status string `json:"status"`
-	Limit  int32  `json:"limit"`
-	Offset int32  `json:"offset"`
-}
-
-// Retrieves transactions by status
-func (q *Queries) GetTransactionsByStatus(ctx context.Context, arg GetTransactionsByStatusParams) ([]Transactions, error) {
-	rows, err := q.db.Query(ctx, getTransactionsByStatus, arg.Status, arg.Limit, arg.Offset)
+func (q *Queries) GetPendingTransactions(ctx context.Context, userID uuid.UUID) ([]GetPendingTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getPendingTransactions, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Transactions{}
+	items := []GetPendingTransactionsRow{}
 	for rows.Next() {
-		var i Transactions
+		var i GetPendingTransactionsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
-			&i.TxHash,
-			&i.TransactionPinHash,
-			&i.Status,
+			&i.WalletAddress,
+			&i.TransactionHash,
+			&i.ChainID,
+			&i.BlockNumber,
+			&i.FromAddress,
+			&i.ToAddress,
+			&i.TokenAddress,
+			&i.TokenSymbol,
+			&i.Amount,
+			&i.TransactionType,
+			&i.TransactionStatus,
+			&i.GasPrice,
+			&i.GasUsed,
+			&i.TransactionFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NetworkName,
 		); err != nil {
 			return nil, err
 		}
@@ -120,30 +747,83 @@ func (q *Queries) GetTransactionsByStatus(ctx context.Context, arg GetTransactio
 	return items, nil
 }
 
-const getTransactionsByUserID = `-- name: GetTransactionsByUserID :many
-SELECT id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at FROM transactions
-WHERE user_id = $1
-ORDER BY created_at DESC
+const getTransactionsByToken = `-- name: GetTransactionsByToken :many
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+WHERE wt.token_symbol = $1
+  AND ($2::uuid IS NULL OR wt.wallet_address IN (
+    SELECT wallet_address FROM user_wallets WHERE user_id = $2
+  ))
+ORDER BY wt.created_at DESC
+LIMIT $4 OFFSET $3
 `
 
-// Retrieves all transactions for a specific user
-func (q *Queries) GetTransactionsByUserID(ctx context.Context, userID uuid.UUID) ([]Transactions, error) {
-	rows, err := q.db.Query(ctx, getTransactionsByUserID, userID)
+type GetTransactionsByTokenParams struct {
+	TokenSymbol pgtype.Text `json:"token_symbol"`
+	UserID      uuid.UUID   `json:"user_id"`
+	OffsetVal   int32       `json:"offset_val"`
+	LimitVal    int32       `json:"limit_val"`
+}
+
+type GetTransactionsByTokenRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
+}
+
+func (q *Queries) GetTransactionsByToken(ctx context.Context, arg GetTransactionsByTokenParams) ([]GetTransactionsByTokenRow, error) {
+	rows, err := q.db.Query(ctx, getTransactionsByToken,
+		arg.TokenSymbol,
+		arg.UserID,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Transactions{}
+	items := []GetTransactionsByTokenRow{}
 	for rows.Next() {
-		var i Transactions
+		var i GetTransactionsByTokenRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
-			&i.TxHash,
-			&i.TransactionPinHash,
-			&i.Status,
+			&i.WalletAddress,
+			&i.TransactionHash,
+			&i.ChainID,
+			&i.BlockNumber,
+			&i.FromAddress,
+			&i.ToAddress,
+			&i.TokenAddress,
+			&i.TokenSymbol,
+			&i.Amount,
+			&i.TransactionType,
+			&i.TransactionStatus,
+			&i.GasPrice,
+			&i.GasUsed,
+			&i.TransactionFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NetworkName,
 		); err != nil {
 			return nil, err
 		}
@@ -155,35 +835,70 @@ func (q *Queries) GetTransactionsByUserID(ctx context.Context, userID uuid.UUID)
 	return items, nil
 }
 
-const getTransactionsByUserIDAndStatus = `-- name: GetTransactionsByUserIDAndStatus :many
-SELECT id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at FROM transactions
-WHERE user_id = $1 AND status = $2
-ORDER BY created_at DESC
+const getUserFiatTransactions = `-- name: GetUserFiatTransactions :many
+SELECT ft.id, ft.bank_account_id, ft.transaction_reference, ft.transaction_type, ft.amount, ft.currency, ft.status, ft.payment_provider, ft.payment_method, ft.provider_reference, ft.provider_fee, ft.reference_type, ft.reference_id, ft.metadata, ft.created_at, ft.updated_at, ba.account_holder_name, ba.bank_name
+FROM fiat_transactions ft
+JOIN bank_accounts ba ON ft.bank_account_id = ba.id
+WHERE ba.user_id = $1
+ORDER BY ft.created_at DESC
+LIMIT $3 OFFSET $2
 `
 
-type GetTransactionsByUserIDAndStatusParams struct {
-	UserID uuid.UUID `json:"user_id"`
-	Status string    `json:"status"`
+type GetUserFiatTransactionsParams struct {
+	UserID    pgtype.UUID `json:"user_id"`
+	OffsetVal int32       `json:"offset_val"`
+	LimitVal  int32       `json:"limit_val"`
 }
 
-// Retrieves transactions for a specific user with a specific status
-func (q *Queries) GetTransactionsByUserIDAndStatus(ctx context.Context, arg GetTransactionsByUserIDAndStatusParams) ([]Transactions, error) {
-	rows, err := q.db.Query(ctx, getTransactionsByUserIDAndStatus, arg.UserID, arg.Status)
+type GetUserFiatTransactionsRow struct {
+	ID                   uuid.UUID          `json:"id"`
+	BankAccountID        uuid.UUID          `json:"bank_account_id"`
+	TransactionReference string             `json:"transaction_reference"`
+	TransactionType      string             `json:"transaction_type"`
+	Amount               decimal.Decimal    `json:"amount"`
+	Currency             string             `json:"currency"`
+	Status               pgtype.Text        `json:"status"`
+	PaymentProvider      pgtype.Text        `json:"payment_provider"`
+	PaymentMethod        pgtype.Text        `json:"payment_method"`
+	ProviderReference    pgtype.Text        `json:"provider_reference"`
+	ProviderFee          pgtype.Numeric     `json:"provider_fee"`
+	ReferenceType        pgtype.Text        `json:"reference_type"`
+	ReferenceID          pgtype.UUID        `json:"reference_id"`
+	Metadata             []byte             `json:"metadata"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	AccountHolderName    string             `json:"account_holder_name"`
+	BankName             string             `json:"bank_name"`
+}
+
+func (q *Queries) GetUserFiatTransactions(ctx context.Context, arg GetUserFiatTransactionsParams) ([]GetUserFiatTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getUserFiatTransactions, arg.UserID, arg.OffsetVal, arg.LimitVal)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Transactions{}
+	items := []GetUserFiatTransactionsRow{}
 	for rows.Next() {
-		var i Transactions
+		var i GetUserFiatTransactionsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.UserID,
-			&i.TxHash,
-			&i.TransactionPinHash,
+			&i.BankAccountID,
+			&i.TransactionReference,
+			&i.TransactionType,
+			&i.Amount,
+			&i.Currency,
 			&i.Status,
+			&i.PaymentProvider,
+			&i.PaymentMethod,
+			&i.ProviderReference,
+			&i.ProviderFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AccountHolderName,
+			&i.BankName,
 		); err != nil {
 			return nil, err
 		}
@@ -195,62 +910,413 @@ func (q *Queries) GetTransactionsByUserIDAndStatus(ctx context.Context, arg GetT
 	return items, nil
 }
 
-const updateTransaction = `-- name: UpdateTransaction :one
-UPDATE transactions
-SET
-  status = COALESCE($2, status),
-  transaction_pin_hash = COALESCE($3, transaction_pin_hash),
-  updated_at = now()
-WHERE id = $1
-RETURNING id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at
+const getUserTransactions = `-- name: GetUserTransactions :many
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+JOIN user_wallets uw ON wt.wallet_address = uw.wallet_address AND wt.chain_id = uw.chain_id
+WHERE uw.user_id = $1
+ORDER BY wt.created_at DESC
+LIMIT $3 OFFSET $2
 `
 
-type UpdateTransactionParams struct {
-	ID                 uuid.UUID `json:"id"`
-	Status             string    `json:"status"`
-	TransactionPinHash string    `json:"transaction_pin_hash"`
+type GetUserTransactionsParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	OffsetVal int32     `json:"offset_val"`
+	LimitVal  int32     `json:"limit_val"`
 }
 
-// Updates transaction details and returns the updated transaction
-func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transactions, error) {
-	row := q.db.QueryRow(ctx, updateTransaction, arg.ID, arg.Status, arg.TransactionPinHash)
-	var i Transactions
+type GetUserTransactionsRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
+}
+
+func (q *Queries) GetUserTransactions(ctx context.Context, arg GetUserTransactionsParams) ([]GetUserTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, getUserTransactions, arg.UserID, arg.OffsetVal, arg.LimitVal)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUserTransactionsRow{}
+	for rows.Next() {
+		var i GetUserTransactionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WalletAddress,
+			&i.TransactionHash,
+			&i.ChainID,
+			&i.BlockNumber,
+			&i.FromAddress,
+			&i.ToAddress,
+			&i.TokenAddress,
+			&i.TokenSymbol,
+			&i.Amount,
+			&i.TransactionType,
+			&i.TransactionStatus,
+			&i.GasPrice,
+			&i.GasUsed,
+			&i.TransactionFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.NetworkName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWalletTransactionByHash = `-- name: GetWalletTransactionByHash :one
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+WHERE wt.transaction_hash = $1
+`
+
+type GetWalletTransactionByHashRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
+}
+
+func (q *Queries) GetWalletTransactionByHash(ctx context.Context, transactionHash string) (GetWalletTransactionByHashRow, error) {
+	row := q.db.QueryRow(ctx, getWalletTransactionByHash, transactionHash)
+	var i GetWalletTransactionByHashRow
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
-		&i.TxHash,
-		&i.TransactionPinHash,
+		&i.WalletAddress,
+		&i.TransactionHash,
+		&i.ChainID,
+		&i.BlockNumber,
+		&i.FromAddress,
+		&i.ToAddress,
+		&i.TokenAddress,
+		&i.TokenSymbol,
+		&i.Amount,
+		&i.TransactionType,
+		&i.TransactionStatus,
+		&i.GasPrice,
+		&i.GasUsed,
+		&i.TransactionFee,
+		&i.ReferenceType,
+		&i.ReferenceID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.NetworkName,
+	)
+	return i, err
+}
+
+const getWalletTransactionsByAddress = `-- name: GetWalletTransactionsByAddress :many
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+WHERE wt.wallet_address = $1
+ORDER BY wt.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type GetWalletTransactionsByAddressParams struct {
+	WalletAddress string `json:"wallet_address"`
+	OffsetVal     int32  `json:"offset_val"`
+	LimitVal      int32  `json:"limit_val"`
+}
+
+type GetWalletTransactionsByAddressRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
+}
+
+func (q *Queries) GetWalletTransactionsByAddress(ctx context.Context, arg GetWalletTransactionsByAddressParams) ([]GetWalletTransactionsByAddressRow, error) {
+	rows, err := q.db.Query(ctx, getWalletTransactionsByAddress, arg.WalletAddress, arg.OffsetVal, arg.LimitVal)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetWalletTransactionsByAddressRow{}
+	for rows.Next() {
+		var i GetWalletTransactionsByAddressRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WalletAddress,
+			&i.TransactionHash,
+			&i.ChainID,
+			&i.BlockNumber,
+			&i.FromAddress,
+			&i.ToAddress,
+			&i.TokenAddress,
+			&i.TokenSymbol,
+			&i.Amount,
+			&i.TransactionType,
+			&i.TransactionStatus,
+			&i.GasPrice,
+			&i.GasUsed,
+			&i.TransactionFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.NetworkName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getWalletTransactionsByNetwork = `-- name: GetWalletTransactionsByNetwork :many
+SELECT wt.id, wt.wallet_address, wt.transaction_hash, wt.chain_id, wt.block_number, wt.from_address, wt.to_address, wt.token_address, wt.token_symbol, wt.amount, wt.transaction_type, wt.transaction_status, wt.gas_price, wt.gas_used, wt.transaction_fee, wt.reference_type, wt.reference_id, wt.created_at, wt.updated_at, sn.name as network_name
+FROM wallet_transactions wt
+JOIN supported_networks sn ON wt.chain_id = sn.chain_id
+WHERE wt.chain_id = $1
+  AND ($2::text IS NULL OR wt.wallet_address = $2)
+ORDER BY wt.created_at DESC
+LIMIT $4 OFFSET $3
+`
+
+type GetWalletTransactionsByNetworkParams struct {
+	ChainID       int32  `json:"chain_id"`
+	WalletAddress string `json:"wallet_address"`
+	OffsetVal     int32  `json:"offset_val"`
+	LimitVal      int32  `json:"limit_val"`
+}
+
+type GetWalletTransactionsByNetworkRow struct {
+	ID                uuid.UUID          `json:"id"`
+	WalletAddress     string             `json:"wallet_address"`
+	TransactionHash   string             `json:"transaction_hash"`
+	ChainID           int32              `json:"chain_id"`
+	BlockNumber       pgtype.Int8        `json:"block_number"`
+	FromAddress       string             `json:"from_address"`
+	ToAddress         string             `json:"to_address"`
+	TokenAddress      pgtype.Text        `json:"token_address"`
+	TokenSymbol       pgtype.Text        `json:"token_symbol"`
+	Amount            decimal.Decimal    `json:"amount"`
+	TransactionType   string             `json:"transaction_type"`
+	TransactionStatus pgtype.Text        `json:"transaction_status"`
+	GasPrice          pgtype.Numeric     `json:"gas_price"`
+	GasUsed           pgtype.Int8        `json:"gas_used"`
+	TransactionFee    pgtype.Numeric     `json:"transaction_fee"`
+	ReferenceType     pgtype.Text        `json:"reference_type"`
+	ReferenceID       pgtype.UUID        `json:"reference_id"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	NetworkName       string             `json:"network_name"`
+}
+
+func (q *Queries) GetWalletTransactionsByNetwork(ctx context.Context, arg GetWalletTransactionsByNetworkParams) ([]GetWalletTransactionsByNetworkRow, error) {
+	rows, err := q.db.Query(ctx, getWalletTransactionsByNetwork,
+		arg.ChainID,
+		arg.WalletAddress,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetWalletTransactionsByNetworkRow{}
+	for rows.Next() {
+		var i GetWalletTransactionsByNetworkRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WalletAddress,
+			&i.TransactionHash,
+			&i.ChainID,
+			&i.BlockNumber,
+			&i.FromAddress,
+			&i.ToAddress,
+			&i.TokenAddress,
+			&i.TokenSymbol,
+			&i.Amount,
+			&i.TransactionType,
+			&i.TransactionStatus,
+			&i.GasPrice,
+			&i.GasUsed,
+			&i.TransactionFee,
+			&i.ReferenceType,
+			&i.ReferenceID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.NetworkName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateFiatTransaction = `-- name: UpdateFiatTransaction :one
+UPDATE fiat_transactions SET
+  status = COALESCE($1, status),
+  payment_provider = COALESCE($2, payment_provider),
+  payment_method = COALESCE($3, payment_method),
+  provider_reference = COALESCE($4, provider_reference),
+  provider_fee = COALESCE($5, provider_fee),
+  metadata = COALESCE($6, metadata),
+  updated_at = NOW()
+WHERE transaction_reference = $7
+RETURNING id, bank_account_id, transaction_reference, transaction_type, amount, currency, status, payment_provider, payment_method, provider_reference, provider_fee, reference_type, reference_id, metadata, created_at, updated_at
+`
+
+type UpdateFiatTransactionParams struct {
+	Status               pgtype.Text    `json:"status"`
+	PaymentProvider      pgtype.Text    `json:"payment_provider"`
+	PaymentMethod        pgtype.Text    `json:"payment_method"`
+	ProviderReference    pgtype.Text    `json:"provider_reference"`
+	ProviderFee          pgtype.Numeric `json:"provider_fee"`
+	Metadata             []byte         `json:"metadata"`
+	TransactionReference string         `json:"transaction_reference"`
+}
+
+func (q *Queries) UpdateFiatTransaction(ctx context.Context, arg UpdateFiatTransactionParams) (FiatTransactions, error) {
+	row := q.db.QueryRow(ctx, updateFiatTransaction,
+		arg.Status,
+		arg.PaymentProvider,
+		arg.PaymentMethod,
+		arg.ProviderReference,
+		arg.ProviderFee,
+		arg.Metadata,
+		arg.TransactionReference,
+	)
+	var i FiatTransactions
+	err := row.Scan(
+		&i.ID,
+		&i.BankAccountID,
+		&i.TransactionReference,
+		&i.TransactionType,
+		&i.Amount,
+		&i.Currency,
 		&i.Status,
+		&i.PaymentProvider,
+		&i.PaymentMethod,
+		&i.ProviderReference,
+		&i.ProviderFee,
+		&i.ReferenceType,
+		&i.ReferenceID,
+		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const updateTransactionStatus = `-- name: UpdateTransactionStatus :one
-UPDATE transactions
-SET
-  status = $2,
-  updated_at = now()
-WHERE id = $1
-RETURNING id, user_id, tx_hash, transaction_pin_hash, status, created_at, updated_at
+const updateWalletTransaction = `-- name: UpdateWalletTransaction :one
+UPDATE wallet_transactions SET
+  block_number = COALESCE($1, block_number),
+  transaction_status = COALESCE($2, transaction_status),
+  gas_price = COALESCE($3, gas_price),
+  gas_used = COALESCE($4, gas_used),
+  transaction_fee = COALESCE($5, transaction_fee),
+  updated_at = NOW()
+WHERE transaction_hash = $6
+RETURNING id, wallet_address, transaction_hash, chain_id, block_number, from_address, to_address, token_address, token_symbol, amount, transaction_type, transaction_status, gas_price, gas_used, transaction_fee, reference_type, reference_id, created_at, updated_at
 `
 
-type UpdateTransactionStatusParams struct {
-	ID     uuid.UUID `json:"id"`
-	Status string    `json:"status"`
+type UpdateWalletTransactionParams struct {
+	BlockNumber       pgtype.Int8    `json:"block_number"`
+	TransactionStatus pgtype.Text    `json:"transaction_status"`
+	GasPrice          pgtype.Numeric `json:"gas_price"`
+	GasUsed           pgtype.Int8    `json:"gas_used"`
+	TransactionFee    pgtype.Numeric `json:"transaction_fee"`
+	TransactionHash   string         `json:"transaction_hash"`
 }
 
-// Updates the status of a transaction and returns the updated transaction
-func (q *Queries) UpdateTransactionStatus(ctx context.Context, arg UpdateTransactionStatusParams) (Transactions, error) {
-	row := q.db.QueryRow(ctx, updateTransactionStatus, arg.ID, arg.Status)
-	var i Transactions
+func (q *Queries) UpdateWalletTransaction(ctx context.Context, arg UpdateWalletTransactionParams) (WalletTransactions, error) {
+	row := q.db.QueryRow(ctx, updateWalletTransaction,
+		arg.BlockNumber,
+		arg.TransactionStatus,
+		arg.GasPrice,
+		arg.GasUsed,
+		arg.TransactionFee,
+		arg.TransactionHash,
+	)
+	var i WalletTransactions
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
-		&i.TxHash,
-		&i.TransactionPinHash,
-		&i.Status,
+		&i.WalletAddress,
+		&i.TransactionHash,
+		&i.ChainID,
+		&i.BlockNumber,
+		&i.FromAddress,
+		&i.ToAddress,
+		&i.TokenAddress,
+		&i.TokenSymbol,
+		&i.Amount,
+		&i.TransactionType,
+		&i.TransactionStatus,
+		&i.GasPrice,
+		&i.GasUsed,
+		&i.TransactionFee,
+		&i.ReferenceType,
+		&i.ReferenceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
