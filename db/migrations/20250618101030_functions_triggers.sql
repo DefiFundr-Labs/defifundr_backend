@@ -1,33 +1,35 @@
 -- +goose Up
 -- Functions and Triggers
 
--- Function to update the updated_at timestamp
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS '
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+' LANGUAGE plpgsql;
+-- +goose StatementEnd
 
--- Function to generate invoice numbers
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION generate_invoice_number()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS '
 BEGIN
     IF NEW.invoice_number IS NULL THEN
-        NEW.invoice_number := 'INV-' || EXTRACT(YEAR FROM NOW()) || '-' || 
-                             LPAD(NEXTVAL('invoice_number_seq')::TEXT, 6, '0');
+        NEW.invoice_number := ''INV-'' || EXTRACT(YEAR FROM NOW()) || ''-'' || 
+                             LPAD(NEXTVAL(''invoice_number_seq'')::TEXT, 6, ''0'');
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+' LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- Create sequence for invoice numbers
 CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1;
 
--- Function to validate payment split percentages
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION validate_payment_split()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS '
 DECLARE
     split_total DECIMAL(5,2) := 0;
     split_item JSONB;
@@ -35,31 +37,30 @@ BEGIN
     IF NEW.payment_split IS NOT NULL THEN
         FOR split_item IN SELECT jsonb_array_elements(NEW.payment_split)
         LOOP
-            split_total := split_total + (split_item->>'percentage')::DECIMAL(5,2);
+            split_total := split_total + (split_item->>''percentage'')::DECIMAL(5,2);
         END LOOP;
         
         IF split_total != 100.00 THEN
-            RAISE EXCEPTION 'Payment split percentages must total 100, got %', split_total;
+            RAISE EXCEPTION ''Payment split percentages must total 100, got %'', split_total;
         END IF;
     END IF;
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+' LANGUAGE plpgsql;
+-- +goose StatementEnd
 
--- Function to update timesheet totals
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_timesheet_totals()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS '
 DECLARE
     timesheet_record RECORD;
 BEGIN
-    -- Get the timesheet ID from either NEW or OLD record
-    IF TG_OP = 'DELETE' THEN
+    IF TG_OP = ''DELETE'' THEN
         SELECT id INTO timesheet_record FROM timesheets WHERE id = OLD.timesheet_id;
     ELSE
         SELECT id INTO timesheet_record FROM timesheets WHERE id = NEW.timesheet_id;
     END IF;
     
-    -- Update timesheet totals
     UPDATE timesheets SET
         total_hours = (
             SELECT COALESCE(SUM(hours), 0) 
@@ -81,7 +82,8 @@ BEGIN
     
     RETURN COALESCE(NEW, OLD);
 END;
-$$ LANGUAGE plpgsql;
+' LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- Create updated_at triggers for all tables that have updated_at columns
 CREATE TRIGGER trigger_users_updated_at BEFORE UPDATE ON users 
@@ -138,6 +140,42 @@ CREATE TRIGGER trigger_company_wallets_updated_at BEFORE UPDATE ON company_walle
 CREATE TRIGGER trigger_bank_accounts_updated_at BEFORE UPDATE ON bank_accounts 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER trigger_payroll_periods_updated_at BEFORE UPDATE ON payroll_periods 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_payrolls_updated_at BEFORE UPDATE ON payrolls 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_payroll_items_updated_at BEFORE UPDATE ON payroll_items 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_invoices_updated_at BEFORE UPDATE ON invoices 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_invoice_items_updated_at BEFORE UPDATE ON invoice_items 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_contracts_updated_at BEFORE UPDATE ON contracts 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_contract_templates_updated_at BEFORE UPDATE ON contract_templates 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_payment_requests_updated_at BEFORE UPDATE ON payment_requests 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_timesheets_updated_at BEFORE UPDATE ON timesheets 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_timesheet_entries_updated_at BEFORE UPDATE ON timesheet_entries 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_wallet_transactions_updated_at BEFORE UPDATE ON wallet_transactions 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_fiat_transactions_updated_at BEFORE UPDATE ON fiat_transactions 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Create invoice number generation trigger
 CREATE TRIGGER trigger_generate_invoice_number BEFORE INSERT ON invoices 
     FOR EACH ROW EXECUTE FUNCTION generate_invoice_number();
@@ -167,6 +205,18 @@ DROP TRIGGER IF EXISTS trigger_update_timesheet_totals_insert ON timesheet_entri
 DROP TRIGGER IF EXISTS trigger_validate_employee_payment_split ON company_employees;
 DROP TRIGGER IF EXISTS trigger_validate_payroll_payment_split ON payroll_items;
 DROP TRIGGER IF EXISTS trigger_generate_invoice_number ON invoices;
+DROP TRIGGER IF EXISTS trigger_fiat_transactions_updated_at ON fiat_transactions;
+DROP TRIGGER IF EXISTS trigger_wallet_transactions_updated_at ON wallet_transactions;
+DROP TRIGGER IF EXISTS trigger_timesheet_entries_updated_at ON timesheet_entries;
+DROP TRIGGER IF EXISTS trigger_timesheets_updated_at ON timesheets;
+DROP TRIGGER IF EXISTS trigger_payment_requests_updated_at ON payment_requests;
+DROP TRIGGER IF EXISTS trigger_contract_templates_updated_at ON contract_templates;
+DROP TRIGGER IF EXISTS trigger_contracts_updated_at ON contracts;
+DROP TRIGGER IF EXISTS trigger_invoice_items_updated_at ON invoice_items;
+DROP TRIGGER IF EXISTS trigger_invoices_updated_at ON invoices;
+DROP TRIGGER IF EXISTS trigger_payroll_items_updated_at ON payroll_items;
+DROP TRIGGER IF EXISTS trigger_payrolls_updated_at ON payrolls;
+DROP TRIGGER IF EXISTS trigger_payroll_periods_updated_at ON payroll_periods;
 DROP TRIGGER IF EXISTS trigger_bank_accounts_updated_at ON bank_accounts;
 DROP TRIGGER IF EXISTS trigger_company_wallets_updated_at ON company_wallets;
 DROP TRIGGER IF EXISTS trigger_user_wallets_updated_at ON user_wallets;
