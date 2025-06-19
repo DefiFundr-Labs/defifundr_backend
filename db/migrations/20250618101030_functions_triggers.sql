@@ -98,9 +98,6 @@ CREATE TRIGGER trigger_companies_updated_at BEFORE UPDATE ON companies
 CREATE TRIGGER trigger_company_users_updated_at BEFORE UPDATE ON company_users 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trigger_company_staff_profiles_updated_at BEFORE UPDATE ON company_staff_profiles 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 CREATE TRIGGER trigger_company_employees_updated_at BEFORE UPDATE ON company_employees 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -230,7 +227,6 @@ DROP TRIGGER IF EXISTS trigger_kyc_country_requirements_updated_at ON kyc_countr
 DROP TRIGGER IF EXISTS trigger_supported_countries_updated_at ON supported_countries;
 DROP TRIGGER IF EXISTS trigger_user_devices_updated_at ON user_devices;
 DROP TRIGGER IF EXISTS trigger_company_employees_updated_at ON company_employees;
-DROP TRIGGER IF EXISTS trigger_company_staff_profiles_updated_at ON company_staff_profiles;
 DROP TRIGGER IF EXISTS trigger_company_users_updated_at ON company_users;
 DROP TRIGGER IF EXISTS trigger_companies_updated_at ON companies;
 DROP TRIGGER IF EXISTS trigger_personal_users_updated_at ON personal_users;

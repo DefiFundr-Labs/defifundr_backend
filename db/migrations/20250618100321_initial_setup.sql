@@ -5,12 +5,18 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Core User and Account Management
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    phone_number VARCHAR(50),
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255),
+    profile_picture_url VARCHAR(255),
     auth_provider VARCHAR(50),
     provider_id VARCHAR(255),
     email_verified BOOLEAN DEFAULT FALSE,
     email_verified_at TIMESTAMPTZ,
+    phone_number_verified BOOLEAN DEFAULT FALSE,
+    phone_number_verified_at TIMESTAMPTZ,
     account_type VARCHAR(50) NOT NULL,
     account_status VARCHAR(50) DEFAULT 'pending',
     two_factor_enabled BOOLEAN DEFAULT FALSE,
@@ -23,13 +29,8 @@ CREATE TABLE users (
 );
 
 CREATE TABLE personal_users (
-    id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    first_name VARCHAR(255),
-    last_name VARCHAR(255),
-    profile_picture VARCHAR(255),
-    phone_number VARCHAR(50),
-    phone_number_verified BOOLEAN DEFAULT FALSE,
-    phone_number_verified_at TIMESTAMPTZ,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     nationality VARCHAR(255),
     residential_country VARCHAR(255),
     user_address VARCHAR(255),
@@ -102,24 +103,11 @@ CREATE TABLE company_users (
     permissions JSONB,
     is_active BOOLEAN DEFAULT TRUE,
     added_by UUID REFERENCES users(id),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(company_id, user_id)
-);
-
-CREATE TABLE company_staff_profiles (
-    id UUID PRIMARY KEY REFERENCES company_users(id) ON DELETE CASCADE,
-    first_name VARCHAR(255),
-    last_name VARCHAR(255),
-    profile_picture VARCHAR(255),
-    phone_number VARCHAR(50),
-    email VARCHAR(255),
-    department VARCHAR(100),
-    job_title VARCHAR(255),
     reports_to UUID REFERENCES company_users(id),
     hire_date DATE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(company_id, user_id)
 );
 
 CREATE TABLE company_employees (
@@ -158,7 +146,6 @@ CREATE INDEX idx_company_employees_user_id ON company_employees(user_id);
 
 -- +goose Down
 DROP TABLE IF EXISTS company_employees CASCADE;
-DROP TABLE IF EXISTS company_staff_profiles CASCADE;
 DROP TABLE IF EXISTS company_users CASCADE;
 DROP TABLE IF EXISTS companies CASCADE;
 DROP TABLE IF EXISTS personal_users CASCADE;
