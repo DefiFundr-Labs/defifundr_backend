@@ -1,3 +1,5 @@
+// Replace your wallet repository methods with these fixed versions
+
 package repositories
 
 import (
@@ -27,13 +29,18 @@ func NewWalletRepository(store db.Queries) *WalletRepository {
 func (r *WalletRepository) CreateWallet(ctx context.Context, wallet domain.UserWallet) error {
 	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "CreateWallet")
 	defer span.End()
+
 	params := db.CreateUserWalletParams{
-		ID:        wallet.ID,
-		UserID:    wallet.UserID,
-		Address:   wallet.Address,
-		Type:      wallet.Type,
-		Chain:     wallet.Chain,
-		IsDefault: wallet.IsDefault,
+		ID:                 wallet.ID,
+		UserID:             wallet.UserID,
+		WalletAddress:      wallet.Address,
+		WalletType:         wallet.Type,
+		ChainID:            wallet.Chain,
+		IsDefault:          toPgBool(wallet.IsDefault),
+		IsVerified:         toPgBool(wallet.IsVerified),
+		VerificationMethod: toPgTextPtr(wallet.VerificationMethod),
+		VerifiedAt:         toPgTimestamptzPtr(wallet.VerifiedAt),
+		Nickname:           toPgTextPtr(wallet.Nickname),
 		CreatedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
 		UpdatedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
 	}
@@ -50,6 +57,7 @@ func (r *WalletRepository) CreateWallet(ctx context.Context, wallet domain.UserW
 func (r *WalletRepository) GetWalletByAddress(ctx context.Context, address string) (*domain.UserWallet, error) {
 	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "GetWalletByAddress")
 	defer span.End()
+
 	wallet, err := r.store.GetWalletByAddress(ctx, address)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -65,6 +73,7 @@ func (r *WalletRepository) GetWalletByAddress(ctx context.Context, address strin
 func (r *WalletRepository) GetWalletsByUserID(ctx context.Context, userID uuid.UUID) ([]domain.UserWallet, error) {
 	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "GetWalletsByUserID")
 	defer span.End()
+
 	wallets, err := r.store.GetWalletsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get wallets by user ID: %w", err)
@@ -82,10 +91,15 @@ func (r *WalletRepository) GetWalletsByUserID(ctx context.Context, userID uuid.U
 func (r *WalletRepository) UpdateWallet(ctx context.Context, wallet domain.UserWallet) error {
 	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "UpdateWallet")
 	defer span.End()
+
 	params := db.UpdateUserWalletParams{
-		ID:        wallet.ID,
-		IsDefault: wallet.IsDefault,
-		UpdatedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
+		ID:                 wallet.ID,
+		WalletType:         wallet.Type,
+		IsDefault:          toPgBool(wallet.IsDefault),
+		IsVerified:         toPgBool(wallet.IsVerified),
+		VerificationMethod: toPgTextPtr(wallet.VerificationMethod),
+		VerifiedAt:         toPgTimestamptzPtr(wallet.VerifiedAt),
+		Nickname:           toPgTextPtr(wallet.Nickname),
 	}
 
 	_, err := r.store.UpdateUserWallet(ctx, params)
@@ -98,6 +112,9 @@ func (r *WalletRepository) UpdateWallet(ctx context.Context, wallet domain.UserW
 
 // DeleteWallet deletes a wallet
 func (r *WalletRepository) DeleteWallet(ctx context.Context, walletID uuid.UUID) error {
+	ctx, span := tracing.Tracer("wallet-repository").Start(ctx, "DeleteWallet")
+	defer span.End()
+
 	err := r.store.DeleteUserWallet(ctx, walletID)
 	if err != nil {
 		return fmt.Errorf("failed to delete wallet: %w", err)
@@ -109,13 +126,17 @@ func (r *WalletRepository) DeleteWallet(ctx context.Context, walletID uuid.UUID)
 // Helper to map DB wallet to domain
 func mapDBWalletToDomain(wallet db.UserWallets) *domain.UserWallet {
 	return &domain.UserWallet{
-		ID:        wallet.ID,
-		UserID:    wallet.UserID,
-		Address:   wallet.Address,
-		Type:      wallet.Type,
-		Chain:     wallet.Chain,
-		IsDefault: wallet.IsDefault,
-		CreatedAt: wallet.CreatedAt.Time,
-		UpdatedAt: wallet.UpdatedAt.Time,
+		ID:                 wallet.ID,
+		UserID:             wallet.UserID,
+		Address:            wallet.WalletAddress,
+		Type:               wallet.WalletType,
+		Chain:              wallet.ChainID,
+		IsDefault:          getBool(wallet.IsDefault),
+		IsVerified:         getBool(wallet.IsVerified),
+		VerificationMethod: getTextStringPtr(wallet.VerificationMethod),
+		VerifiedAt:         getTimestamptzPtr(wallet.VerifiedAt),
+		Nickname:           getTextStringPtr(wallet.Nickname),
+		CreatedAt:          getTimestamptzTime(wallet.CreatedAt),
+		UpdatedAt:          getTimestamptzTime(wallet.UpdatedAt),
 	}
 }

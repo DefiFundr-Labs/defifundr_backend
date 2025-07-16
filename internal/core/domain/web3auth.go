@@ -30,14 +30,18 @@ type Wallet struct {
 
 // UserWallet represents a user's blockchain wallet
 type UserWallet struct {
-	ID        uuid.UUID `json:"id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Address   string    `json:"address"`
-	Type      string    `json:"type"`
-	Chain     string    `json:"chain"`
-	IsDefault bool      `json:"is_default"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                 uuid.UUID  `json:"id"`
+	UserID             uuid.UUID  `json:"user_id"`
+	Address            string     `json:"address"`
+	Type               string     `json:"type"`
+	Chain              int32      `json:"chain"`
+	IsDefault          bool       `json:"is_default"`
+	IsVerified         bool       `json:"is_verified"`
+	VerificationMethod *string    `json:"verification_method,omitempty"`
+	VerifiedAt         *time.Time `json:"verified_at,omitempty"`
+	Nickname           *string    `json:"nickname,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 // AuthProvider enumerates supported authentication providers
@@ -57,8 +61,10 @@ const (
 type SecurityEvent struct {
 	ID        uuid.UUID              `json:"id"`
 	UserID    uuid.UUID              `json:"user_id"`
+	CompanyID uuid.UUID              `json:"company_id"`
 	EventType string                 `json:"event_type"`
 	IPAddress string                 `json:"ip_address"`
+    Severity  string				 `json:"severity"`
 	UserAgent string                 `json:"user_agent"`
 	Metadata  map[string]interface{} `json:"metadata"`
 	Timestamp time.Time              `json:"timestamp"`

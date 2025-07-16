@@ -1,10 +1,8 @@
-// repositories/session_repository.go (enhanced)
 package repositories
 
 import (
 	"context"
 	"fmt"
-	"time"
 
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
@@ -23,32 +21,25 @@ func NewSessionRepository(store db.Queries) *SessionRepository {
 	}
 }
 
-// CreateSession creates a new session
 func (r *SessionRepository) CreateSession(ctx context.Context, session domain.Session) (*domain.Session, error) {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "CreateSession")
 	defer span.End()
+
 	params := db.CreateSessionParams{
 		ID:               session.ID,
 		UserID:           session.UserID,
-		RefreshToken:     session.RefreshToken,
-		OauthAccessToken: pgtype.Text{String: session.OAuthAccessToken, Valid: true},
-		UserAgent:        session.UserAgent,
-		UserLoginType:    session.UserLoginType,
-		MfaEnabled:       session.MFAEnabled,
-		ClientIp:         session.ClientIP,
+		RefreshToken:     toPgTextPtr(&session.RefreshToken),
+		UserAgent:        toPgTextPtr(&session.UserAgent),
+		ClientIp:         toPgTextPtr(&session.ClientIP),
+		LastUsedAt:       toPgTimestamptzPtr(&session.LastUsedAt),
+		WebOauthClientID: toPgTextPtr(session.WebOAuthClientID),  // This is already *string
+		OauthAccessToken: toPgTextPtr(&session.OAuthAccessToken),
+		OauthIDToken:     toPgTextPtr(session.OAuthIDToken),      // This is already *string
+		UserLoginType:    toPgTextPtr(&session.UserLoginType),
+		MfaVerified:      session.MFAVerified,
 		IsBlocked:        session.IsBlocked,
-		LastUsedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-		ExpiresAt:        pgtype.Timestamp{Time: session.ExpiresAt, Valid: true},
-	}
-
-	// Add WebOAuthClientID if provided
-	if session.WebOAuthClientID != nil {
-		params.WebOauthClientID = pgtype.Text{String: *session.WebOAuthClientID, Valid: true}
-	}
-
-	// Add OAuthIDToken if provided
-	if session.OAuthIDToken != nil {
-		params.OauthIDToken = pgtype.Text{String: *session.OAuthIDToken, Valid: true}
+		ExpiresAt:        toPgTimestamptzPtr(session.ExpiresAt),         // This is already *time.Time
+		CreatedAt:        toPgTimestamptzPtr(&session.CreatedAt),
 	}
 
 	dbSession, err := r.store.CreateSession(ctx, params)
@@ -56,49 +47,67 @@ func (r *SessionRepository) CreateSession(ctx context.Context, session domain.Se
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	return mapDbSessionToDomain(dbSession), nil
+	return mapDBSessionToDomain(dbSession), nil
+}
+
+// Fixed mapDBSessionToDomain function
+func mapDBSessionToDomain(dbSession db.Sessions) *domain.Session {
+	return &domain.Session{
+		ID:                dbSession.ID,
+		UserID:            dbSession.UserID,
+		RefreshToken:      getTextString(dbSession.RefreshToken),
+		UserAgent:         getTextString(dbSession.UserAgent),
+		ClientIP:          getTextString(dbSession.ClientIp),
+		LastUsedAt:        getTimestamptzTime(dbSession.LastUsedAt),
+		WebOAuthClientID:  getTextStringPtr(dbSession.WebOauthClientID),
+		OAuthAccessToken:  getTextString(dbSession.OauthAccessToken),
+		OAuthIDToken:      getTextStringPtr(dbSession.OauthIDToken),
+		UserLoginType:     getTextString(dbSession.UserLoginType),
+		MFAVerified:       getBool(dbSession.MfaVerified),        // Fixed: use getBool helper
+		IsBlocked:         getBool(dbSession.IsBlocked),          // Fixed: use getBool helper
+		ExpiresAt:         getTimestamptz(dbSession.ExpiresAt),   // Fixed: use getTimestamptz helper
+		CreatedAt:         getTimestamptzTime(dbSession.CreatedAt),
+	}
 }
 
 // GetSessionByID gets a session by ID
 func (r *SessionRepository) GetSessionByID(ctx context.Context, id uuid.UUID) (*domain.Session, error) {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetSessionByID")
 	defer span.End()
+
 	dbSession, err := r.store.GetSessionByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session by ID: %w", err)
 	}
 
-	return mapDbSessionToDomain(dbSession), nil
+	return mapDBSessionToDomain(dbSession), nil
 }
 
-// GetSessionByRefreshToken gets a session by refresh token
 func (r *SessionRepository) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*domain.Session, error) {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetSessionByRefreshToken")
 	defer span.End()
-	dbSession, err := r.store.GetSessionByRefreshToken(ctx, refreshToken)
+
+	dbSession, err := r.store.GetSessionByRefreshToken(ctx, pgtype.Text{String: refreshToken, Valid: true})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session by refresh token: %w", err)
 	}
 
-	return mapDbSessionToDomain(dbSession), nil
+	return mapDBSessionToDomain(dbSession), nil
 }
 
 // GetActiveSessionsByUserID gets all active sessions for a user
 func (r *SessionRepository) GetActiveSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
-	return r.GetSessionsByUserID(ctx, userID)
-}
-
-func (r *SessionRepository) GetSessionsByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
-	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetSessionsByUserID")
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "GetActiveSessionsByUserID")
 	defer span.End()
-	dbSessions, err := r.store.GetActiveSessionsByUserID(ctx, userID)
+
+	dbSessions, err := r.store.GetSessionsByUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active sessions: %w", err)
 	}
 
 	sessions := make([]domain.Session, len(dbSessions))
 	for i, dbSession := range dbSessions {
-		sessions[i] = *mapDbSessionToDomain(dbSession)
+		sessions[i] = *mapDBSessionToDomain(dbSession)
 	}
 
 	return sessions, nil
@@ -108,32 +117,26 @@ func (r *SessionRepository) GetSessionsByUserID(ctx context.Context, userID uuid
 func (r *SessionRepository) UpdateRefreshToken(ctx context.Context, sessionID uuid.UUID, refreshToken string) (*domain.Session, error) {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "UpdateRefreshToken")
 	defer span.End()
-	params := db.UpdateSessionRefreshTokenParams{
+
+	params := db.UpdateRefreshTokenParams{
 		ID:           sessionID,
-		RefreshToken: refreshToken,
-		LastUsedAt:   pgtype.Timestamp{Time: time.Now(), Valid: true},
+		RefreshToken: pgtype.Text{String: refreshToken, Valid: true},
 	}
 
-	dbSession, err := r.store.UpdateSessionRefreshToken(ctx, params)
+	dbSession, err := r.store.UpdateRefreshToken(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update refresh token: %w", err)
 	}
 
-	return mapDbSessionToDomain(dbSession), nil
+	return mapDBSessionToDomain(dbSession), nil
 }
 
 // UpdateSession updates a session
 func (r *SessionRepository) UpdateSession(ctx context.Context, session domain.Session) error {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "UpdateSession")
 	defer span.End()
-	params := db.UpdateSessionParams{
-		ID:         session.ID,
-		IsBlocked:  session.IsBlocked,
-		MfaEnabled: session.MFAEnabled,
-		LastUsedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
-	}
 
-	_, err := r.store.UpdateSession(ctx, params)
+	err := r.store.UpdateSessionLastUsed(ctx, session.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update session: %w", err)
 	}
@@ -145,7 +148,8 @@ func (r *SessionRepository) UpdateSession(ctx context.Context, session domain.Se
 func (r *SessionRepository) BlockSession(ctx context.Context, id uuid.UUID) error {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "BlockSession")
 	defer span.End()
-	err := r.store.BlockSession(ctx, id)
+
+	err := r.store.RevokeSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to block session: %w", err)
 	}
@@ -155,13 +159,10 @@ func (r *SessionRepository) BlockSession(ctx context.Context, id uuid.UUID) erro
 
 // BlockAllUserSessions blocks all sessions for a user
 func (r *SessionRepository) BlockAllUserSessions(ctx context.Context, userID uuid.UUID) error {
-	return r.RevokeAllUserSessions(ctx, userID)
-}
-
-func (r *SessionRepository) RevokeAllUserSessions(ctx context.Context, userID uuid.UUID) error {
-	ctx, span := tracing.Tracer("session-repository").Start(ctx, "RevokeAllUserSessions")
+	ctx, span := tracing.Tracer("session-repository").Start(ctx, "BlockAllUserSessions")
 	defer span.End()
-	err := r.store.BlockAllUserSessions(ctx, userID)
+
+	err := r.store.RevokeAllUserSessions(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to block all user sessions: %w", err)
 	}
@@ -173,6 +174,7 @@ func (r *SessionRepository) RevokeAllUserSessions(ctx context.Context, userID uu
 func (r *SessionRepository) DeleteSession(ctx context.Context, id uuid.UUID) error {
 	ctx, span := tracing.Tracer("session-repository").Start(ctx, "DeleteSession")
 	defer span.End()
+
 	err := r.store.DeleteSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
@@ -181,47 +183,4 @@ func (r *SessionRepository) DeleteSession(ctx context.Context, id uuid.UUID) err
 	return nil
 }
 
-// Helper function to map database session model to domain model
-func mapDbSessionToDomain(dbSession db.Sessions) *domain.Session {
-	var webOAuthClientID *string
-	if dbSession.WebOauthClientID.Valid {
-		webOAuthClientID = &dbSession.WebOauthClientID.String
-	}
 
-	var oAuthIDToken *string
-	if dbSession.OauthIDToken.Valid {
-		oAuthIDToken = &dbSession.OauthIDToken.String
-	}
-
-	var oAuthAccessToken string
-	if dbSession.OauthAccessToken.Valid {
-		oAuthAccessToken = dbSession.OauthAccessToken.String
-	}
-
-	var expiresAt time.Time
-	if dbSession.ExpiresAt.Valid {
-		expiresAt = dbSession.ExpiresAt.Time
-	}
-
-	var lastUsedAt time.Time
-	if dbSession.LastUsedAt.Valid {
-		lastUsedAt = dbSession.LastUsedAt.Time
-	}
-
-	return &domain.Session{
-		ID:               dbSession.ID,
-		UserID:           dbSession.UserID,
-		RefreshToken:     dbSession.RefreshToken,
-		WebOAuthClientID: webOAuthClientID,
-		OAuthIDToken:     oAuthIDToken,
-		OAuthAccessToken: oAuthAccessToken,
-		UserAgent:        dbSession.UserAgent,
-		UserLoginType:    dbSession.UserLoginType,
-		MFAEnabled:       dbSession.MfaEnabled,
-		ClientIP:         dbSession.ClientIp,
-		IsBlocked:        dbSession.IsBlocked,
-		ExpiresAt:        expiresAt,
-		LastUsedAt:       lastUsedAt,
-		CreatedAt:        dbSession.CreatedAt.Time,
-	}
-}

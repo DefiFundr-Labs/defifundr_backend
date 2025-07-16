@@ -3,21 +3,22 @@ package services
 
 import (
 	"context"
-	"github.com/demola234/defifundr/pkg/tracing"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/demola234/defifundr/pkg/tracing"
 
 	"github.com/demola234/defifundr/config"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	commons "github.com/demola234/defifundr/infrastructure/hash"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
+	random "github.com/demola234/defifundr/pkg/random"
 	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
 	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
-	random "github.com/demola234/defifundr/pkg/random"
 )
 
 type authService struct {
@@ -27,6 +28,7 @@ type authService struct {
 	walletRepo   ports.WalletRepository
 	securityRepo ports.SecurityRepository
 	emailService ports.EmailService
+	companyRepo ports.CompanyRepository
 	tokenMaker   tokenMaker.Maker
 	config       config.Config
 	logger       logging.Logger
@@ -99,6 +101,7 @@ func NewAuthService(
 	walletRepo ports.WalletRepository,
 	securityRepo ports.SecurityRepository,
 	emailService ports.EmailService,
+	companyRepo ports.CompanyRepository,
 	tokenMaker tokenMaker.Maker,
 	config config.Config,
 	logger logging.Logger,
@@ -112,6 +115,7 @@ func NewAuthService(
 		walletRepo:   walletRepo,
 		securityRepo: securityRepo,
 		emailService: emailService,
+		companyRepo: companyRepo,
 		tokenMaker:   tokenMaker,
 		config:       config,
 		logger:       logger,
@@ -121,19 +125,21 @@ func NewAuthService(
 }
 
 // Login implements ports.AuthService.
-func (a *authService) Login(ctx context.Context, email string, user domain.User, password string) (*domain.User, error) {
+func (a *authService) Login(ctx context.Context, email string,  provider string, providerId string, webAuthToken string, password string) (*domain.User, error) {
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "Login")
 	defer span.End()
 	a.logger.Info("Starting user registration process", map[string]interface{}{
 		"email":    email,
-		"provider": user.AuthProvider,
+		"provider": provider,
 	})
 
-	if user.AuthProvider == "email" {
+	
+
+	if provider == "email" {
 		// Email-based authentication requires a password
 		if password == "" {
 			a.logger.Error("Password required for email authentication", nil, map[string]interface{}{
-				"email": user.Email,
+				"email": email,
 			})
 			pwErr := errors.New("password is required for email authentication")
 			span.RecordError(pwErr)
@@ -175,40 +181,40 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 			span.RecordError(invPwErr)
 			return nil, invPwErr
 		}
-	} else if user.AuthProvider != "" && user.WebAuthToken != "" {
+	} else if provider != "" && webAuthToken != "" {
 		// For OAuth or Web3Auth, validate the token and fill user data
-		claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, user.WebAuthToken)
+		claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
 		if err != nil {
 			a.logger.Error("Failed to validate WebAuth token", err, map[string]interface{}{
-				"provider": user.AuthProvider,
+				"provider": provider,
 			})
 			return nil, fmt.Errorf("invalid authentication token: %w", err)
 		}
 
 		// Extract user information from OAuth claims
 		if claims.Email != "" {
-			user.Email = claims.Email
+			email = claims.Email
 		}
 	} else {
 		a.logger.Error("Missing authentication credentials", nil, map[string]interface{}{
-			"provider": user.AuthProvider,
+			"provider": provider,
 		})
 		credErr := errors.New("missing authentication credentials")
 		span.RecordError(credErr)
 		return nil, credErr
 	}
 	// Step 2: Check if user with same email already exists
-	existingUser, err := a.userRepo.GetUserByEmail(ctx, user.Email)
+	existingUser, err := a.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		a.logger.Error("Failed to get user by email", err, map[string]interface{}{
-			"email": user.Email,
+			"email": email,
 		})
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 	if existingUser == nil {
 		a.logger.Warn("Login attempt for non-existing email", map[string]interface{}{
-			"email": user.Email,
+			"email": email,
 		})
 		notRegisteredErr := errors.New("email not registered")
 		span.RecordError(notRegisteredErr)
@@ -220,13 +226,32 @@ func (a *authService) Login(ctx context.Context, email string, user domain.User,
 }
 
 // RegisterUser implements the user registration process with Web3Auth integration
-func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwordStr string) (*domain.User, error) {
+func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastName, authProvider, webAuthToken, passwordStr string) (*domain.User, error) {
+	user := domain.User{
+		ID:           uuid.New(),
+		Email:        email,
+		FirstName:    firstName,
+		LastName:     lastName,
+		AuthProvider: authProvider,
+		AccountType:  "personal",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterUser")
 	defer span.End()
 	a.logger.Info("Starting user registration process", map[string]interface{}{
 		"email":    user.Email,
 		"provider": user.AuthProvider,
 	})
+
+	existingUser, err := a.userRepo.GetUserByEmail(ctx, user.Email)
+	if err == nil && existingUser != nil {
+		a.logger.Warn("Registration attempt for existing email", map[string]interface{}{
+			"email": user.Email,
+		})
+		span.RecordError(err)
+		return nil, errors.New("email already registered")
+	}
 
 	// Step 1: Handle authentication based on provider
 	if user.AuthProvider == "email" {
@@ -249,9 +274,9 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 			return nil, fmt.Errorf("failed to hash password: %w", err)
 		}
 		user.PasswordHash = hashedPassword
-	} else if user.AuthProvider != "" && user.WebAuthToken != "" {
+	} else if user.AuthProvider != "" && webAuthToken != "" {
 		// For OAuth or Web3Auth, validate the token and fill user data
-		claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, user.WebAuthToken)
+		claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
 		if err != nil {
 			a.logger.Error("Failed to validate WebAuth token", err, map[string]interface{}{
 				"provider": user.AuthProvider,
@@ -276,12 +301,12 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 
 		if claims.ProfileImage != "" {
 			profileImage := claims.ProfileImage
-			user.ProfilePicture = &profileImage
+			user.ProfilePictureURL = &profileImage
 		}
 
 		// Set provider ID (usually the email for Google OAuth)
 		if claims.VerifierID != "" {
-			user.ProviderID = claims.VerifierID
+			user.ProviderID = &claims.VerifierID
 		}
 
 		// Refine provider information based on verifier
@@ -306,15 +331,6 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 		return nil, errors.New("missing authentication credentials")
 	}
 
-	// Step 2: Check if user with same email already exists
-	existingUser, err := a.userRepo.GetUserByEmail(ctx, user.Email)
-	if err == nil && existingUser != nil {
-		a.logger.Warn("Registration attempt for existing email", map[string]interface{}{
-			"email": user.Email,
-		})
-		span.RecordError(err)
-		return nil, errors.New("email already registered")
-	}
 
 	// Step 3: Set default values if not provided
 	if user.ID == uuid.Nil {
@@ -334,196 +350,455 @@ func (a *authService) RegisterUser(ctx context.Context, user domain.User, passwo
 }
 
 // RegisterBusiness implements ports.AuthService.
-func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
-	// Add Users business details
-	// Update the user with business details
-	a.logger.Info("Starting user personal details update process", map[string]interface{}{
-		"user_id": companyInfo.UserID,
+func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.Company) (*domain.Company, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterBusiness")
+	defer span.End()
+	
+	a.logger.Info("Starting business registration process", map[string]interface{}{
+		"owner_id": companyInfo.OwnerID,
 	})
 
-	// Get the existing user by ID
-	existingCompanyInfo, err := a.userRepo.GetUserCompanyInfo(ctx, companyInfo.UserID)
+	// Check if company already exists for this owner
+	existingCompany, err := a.companyRepo.GetCompanyByOwnerID(ctx, companyInfo.OwnerID)
 	if err != nil {
-		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": companyInfo.UserID,
-		})
-		
-		return nil, fmt.Errorf("failed to get user by ID: %w", err)
+		// If company doesn't exist, create a new one
+		if err.Error() == "no rows in result set" || err.Error() == "sql: no rows in result set" {
+			// Verify that the owner exists
+			owner, err := a.userRepo.GetUserByID(ctx, companyInfo.OwnerID)
+			if err != nil {
+				a.logger.Error("Failed to get owner by ID", err, map[string]interface{}{
+					"owner_id": companyInfo.OwnerID,
+				})
+				span.RecordError(err)
+				return nil, fmt.Errorf("failed to get owner by ID: %w", err)
+			}
+
+			// Set additional fields for new company
+			companyInfo.ID = uuid.New()
+			companyInfo.CreatedAt = time.Now()
+			companyInfo.UpdatedAt = time.Now()
+			companyInfo.KYBStatus = "pending" // Default KYB status
+
+			// Create the company
+			createdCompany, err := a.companyRepo.CreateCompany(ctx, companyInfo)
+			if err != nil {
+				a.logger.Error("Failed to create company", err, map[string]interface{}{
+					"owner_id": companyInfo.OwnerID,
+				})
+				span.RecordError(err)
+				return nil, fmt.Errorf("failed to create company: %w", err)
+			}
+
+			// Update the user's business details timestamp
+			owner.UpdatedAt = time.Now()
+			_, err = a.userRepo.UpdateUserBusinessDetails(ctx, *owner)
+			if err != nil {
+				a.logger.Error("Failed to update user business details timestamp", err, map[string]interface{}{
+					"user_id": companyInfo.OwnerID,
+				})
+				// Don't fail the whole operation for this
+			}
+
+			a.logger.Info("Company created successfully", map[string]interface{}{
+				"company_id": createdCompany.ID,
+				"owner_id":   companyInfo.OwnerID,
+			})
+
+			return createdCompany, nil
+
+		} else {
+			a.logger.Error("Failed to get company by owner ID", err, map[string]interface{}{
+				"owner_id": companyInfo.OwnerID,
+			})
+			span.RecordError(err)
+			return nil, fmt.Errorf("failed to get company by owner ID: %w", err)
+		}
 	}
 
-	// Update only the personal details fields, keeping other fields as they are
-	updatedCompany := *existingCompanyInfo
-	// Update only the company details fields, keeping other fields as they are
-	updatedCompany.CompanyName = companyInfo.CompanyName
-	updatedCompany.CompanyDescription = companyInfo.CompanyDescription
-	updatedCompany.AccountType = companyInfo.AccountType
-	updatedCompany.CompanySize = companyInfo.CompanySize
-	updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
-	updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
-	updatedCompany.CompanyWebsite = companyInfo.CompanyWebsite
-
-	// Update the user in the database
-	company, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedCompany)
-	if err != nil {
-		a.logger.Error("Failed to update user", err, map[string]interface{}{
-			"user_id": companyInfo.UserID,
-		})
-		return nil, fmt.Errorf("failed to update user: %w", err)
+	// Company exists, update it
+	updatedCompany := *existingCompany
+	
+	// Update company fields if provided
+	if companyInfo.CompanyName != "" {
+		updatedCompany.CompanyName = companyInfo.CompanyName
 	}
+	if companyInfo.CompanyDescription != nil {
+		updatedCompany.CompanyDescription = companyInfo.CompanyDescription
+	}
+	if companyInfo.CompanySize != nil {
+		updatedCompany.CompanySize = companyInfo.CompanySize
+	}
+	if companyInfo.CompanyHeadquarters != nil {
+		updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
+	}
+	if companyInfo.CompanyIndustry != nil {
+		updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
+	}
+	if companyInfo.CompanyWebsite != nil {
+		updatedCompany.CompanyWebsite = companyInfo.CompanyWebsite
+	}
+	
+	updatedCompany.UpdatedAt = time.Now()
+
+	// Update the company in the database
+	company, err := a.companyRepo.UpdateCompany(ctx, updatedCompany)
+	if err != nil {
+		a.logger.Error("Failed to update company", err, map[string]interface{}{
+			"company_id": existingCompany.ID,
+			"owner_id":   companyInfo.OwnerID,
+		})
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to update company: %w", err)
+	}
+
+	// Update the user's business details timestamp
+	owner, err := a.userRepo.GetUserByID(ctx, companyInfo.OwnerID)
+	if err == nil {
+		owner.UpdatedAt = time.Now()
+		_, err = a.userRepo.UpdateUserBusinessDetails(ctx, *owner)
+		if err != nil {
+			a.logger.Error("Failed to update user business details timestamp", err, map[string]interface{}{
+				"user_id": companyInfo.OwnerID,
+			})
+			// Don't fail the whole operation for this
+		}
+	}
+
+	a.logger.Info("Company updated successfully", map[string]interface{}{
+		"company_id": company.ID,
+		"owner_id":   companyInfo.OwnerID,
+	})
 
 	return company, nil
 }
 
 // RegisterPersonalDetails implements ports.AuthService
-func (a *authService) RegisterPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+func (a *authService) RegisterPersonalDetails(ctx context.Context, userId uuid.UUID, nationality string, dateOfBirth time.Time, gender string, personalAccountType string, phoneNumber string) (*domain.User, error) {
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterPersonalDetails")
 	defer span.End()
+	
 	a.logger.Info("Starting user personal details update process", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": userId,
 	})
 
 	// Get the existing user by ID
-	existingUser, err := a.userRepo.GetUserByID(ctx, user.ID)
+	existingUser, err := a.userRepo.GetUserByID(ctx, userId)
 	if err != nil {
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": userId,
 		})
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
-	// Update only the personal details fields, keeping other fields as they are
-	updatedUser := *existingUser
-	updatedUser.Nationality = user.Nationality
+	// Update the main user record with phone number if provided
+	if phoneNumber != "" {
+		updatedUser := *existingUser
+		updatedUser.PhoneNumber = phoneNumber
+		updatedUser.UpdatedAt = time.Now()
 
-	if user.AccountType != "" {
-		updatedUser.AccountType = user.AccountType
+		result, err := a.userRepo.UpdateUserPersonalDetails(ctx, updatedUser)
+		if err != nil {
+			a.logger.Error("Failed to update user phone number", err, map[string]interface{}{
+				"user_id": userId,
+			})
+			span.RecordError(err)
+			return nil, fmt.Errorf("failed to update user phone number: %w", err)
+		}
+		existingUser = result
 	}
 
-	if user.PersonalAccountType != "" {
-		updatedUser.PersonalAccountType = user.PersonalAccountType
-	}
-
-	if user.PhoneNumber != nil {
-		updatedUser.PhoneNumber = user.PhoneNumber
-	}
-
-	// Update the user with personal details
-	result, err := a.userRepo.UpdateUserPersonalDetails(ctx, updatedUser)
+	// Check if personal user already exists
+	existingPersonalUser, err := a.userRepo.GetPersonalUserByUserID(ctx, userId)
 	if err != nil {
-		a.logger.Error("Failed to update user personal details", err, map[string]interface{}{
-			"user_id": user.ID,
+		// If personal user doesn't exist, create a new one
+		if err.Error() == "no rows in result set" || err.Error() == "sql: no rows in result set" {
+			personalUser := domain.PersonalUser{
+				ID:                  uuid.New(), // Generate new ID for personal user
+				UserID:              userId,
+				Nationality:         &nationality,
+				Gender:              &gender,
+				DateOfBirth:         &dateOfBirth,
+				PersonalAccountType: &personalAccountType,
+				CreatedAt:           time.Now(),
+				UpdatedAt:           time.Now(),
+			}
+
+			_, err := a.userRepo.CreatePersonalUser(ctx, personalUser)
+			if err != nil {
+				a.logger.Error("Failed to create personal user", err, map[string]interface{}{
+					"user_id": userId,
+				})
+				span.RecordError(err)
+				return nil, fmt.Errorf("failed to create personal user: %w", err)
+			}
+
+			a.logger.Info("Personal user created successfully", map[string]interface{}{
+				"user_id": userId,
+			})
+
+		} else {
+			a.logger.Error("Failed to get personal user by user ID", err, map[string]interface{}{
+				"user_id": userId,
+			})
+			span.RecordError(err)
+			return nil, fmt.Errorf("failed to get personal user: %w", err)
+		}
+	} else {
+		// Update existing personal user
+		updatedPersonalUser := *existingPersonalUser
+		
+		// Update fields if provided
+		if nationality != "" {
+			updatedPersonalUser.Nationality = &nationality
+		}
+		if gender != "" {
+			updatedPersonalUser.Gender = &gender
+		}
+		if !dateOfBirth.IsZero() {
+			updatedPersonalUser.DateOfBirth = &dateOfBirth
+		}
+		if personalAccountType != "" {
+			updatedPersonalUser.PersonalAccountType = &personalAccountType
+		}
+		
+		updatedPersonalUser.UpdatedAt = time.Now()
+
+		_, err := a.userRepo.UpdatePersonalUser(ctx, updatedPersonalUser)
+		if err != nil {
+			a.logger.Error("Failed to update personal user", err, map[string]interface{}{
+				"user_id": userId,
+			})
+			span.RecordError(err)
+			return nil, fmt.Errorf("failed to update personal user: %w", err)
+		}
+
+		a.logger.Info("Personal user updated successfully", map[string]interface{}{
+			"user_id": userId,
 		})
-		return nil, fmt.Errorf("failed to update user personal details: %w", err)
 	}
 
-	a.logger.Info("User personal details updated successfully", map[string]interface{}{
-		"user_id": user.ID,
+	// Return the updated main user
+	finalUser, err := a.userRepo.GetUserByID(ctx, userId)
+	if err != nil {
+		a.logger.Error("Failed to get updated user", err, map[string]interface{}{
+			"user_id": userId,
+		})
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to get updated user: %w", err)
+	}
+
+	a.logger.Info("User personal details processed successfully", map[string]interface{}{
+		"user_id": userId,
 	})
 
-	return result, nil
+	return finalUser, nil
 }
 
 // RegisterBusinessDetails implements ports.AuthService
-func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo domain.CompanyInfo) (*domain.CompanyInfo, error) {
+func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo domain.Company) (*domain.Company, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterBusinessDetails")
+	defer span.End()
+	
 	a.logger.Info("Starting business details update process", map[string]interface{}{
-		"user_id": companyInfo.UserID,
+		"owner_id": companyInfo.OwnerID,
 	})
 
-	// Get the existing user by ID
-	existingCompany, err := a.userRepo.GetUserCompanyInfo(ctx, companyInfo.UserID)
+	// Get the existing company by owner ID
+	existingCompany, err := a.companyRepo.GetCompanyByOwnerID(ctx, companyInfo.OwnerID)
 	if err != nil {
-		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": companyInfo.UserID,
+		a.logger.Error("Failed to get company by owner ID", err, map[string]interface{}{
+			"owner_id": companyInfo.OwnerID,
 		})
-		return nil, fmt.Errorf("failed to get user by ID: %w", err)
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to get company by owner ID: %w", err)
 	}
 
 	// Update only the business details fields, keeping other fields as they are
 	updatedCompany := *existingCompany
 
-	updatedCompany.CompanyName = companyInfo.CompanyName
-
-	if *companyInfo.CompanyDescription != "" {
-		updatedCompany.CompanyDescription = companyInfo.CompanyName
+	// Update company name (assuming it's always required)
+	if companyInfo.CompanyName != "" {
+		updatedCompany.CompanyName = companyInfo.CompanyName
 	}
 
-	if *companyInfo.CompanyHeadquarters != "" {
+	// Update optional fields - check if they're pointers or regular strings
+	// If CompanyDescription is a pointer
+	if companyInfo.CompanyDescription != nil && *companyInfo.CompanyDescription != "" {
+		updatedCompany.CompanyDescription = companyInfo.CompanyDescription
+	}
+
+	// If CompanyHeadquarters is a pointer
+	if companyInfo.CompanyHeadquarters != nil && *companyInfo.CompanyHeadquarters != "" {
 		updatedCompany.CompanyHeadquarters = companyInfo.CompanyHeadquarters
 	}
 
-	if *companyInfo.CompanyIndustry != "" {
+	// If CompanyIndustry is a pointer
+	if companyInfo.CompanyIndustry != nil && *companyInfo.CompanyIndustry != "" {
 		updatedCompany.CompanyIndustry = companyInfo.CompanyIndustry
 	}
 
-	if *companyInfo.CompanySize != "" {
+	// If CompanySize is a pointer
+	if companyInfo.CompanySize != nil && *companyInfo.CompanySize != "" {
 		updatedCompany.CompanySize = companyInfo.CompanySize
 	}
 
-	if companyInfo.AccountType != "" {
-		updatedCompany.AccountType = companyInfo.AccountType
+	// If CompanyWebsite is provided
+	if companyInfo.CompanyWebsite != nil && *companyInfo.CompanyWebsite != "" {
+		updatedCompany.CompanyWebsite = companyInfo.CompanyWebsite
 	}
 
-	// Update the user with business details
-	businessResult, err := a.userRepo.UpdateUserBusinessDetails(ctx, updatedCompany)
+	// Set updated timestamp
+	updatedCompany.UpdatedAt = time.Now()
+
+	// Update the company in the database using company repository
+	businessResult, err := a.companyRepo.UpdateCompany(ctx, updatedCompany)
 	if err != nil {
-		a.logger.Error("Failed to update business details", err, map[string]interface{}{
-			"user_id": companyInfo.UserID,
+		a.logger.Error("Failed to update company details", err, map[string]interface{}{
+			"owner_id":   companyInfo.OwnerID,
+			"company_id": existingCompany.ID,
 		})
-		return nil, fmt.Errorf("failed to update business details: %w", err)
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to update company details: %w", err)
+	}
+
+	// Update the user's business details timestamp (optional)
+	owner, err := a.userRepo.GetUserByID(ctx, companyInfo.OwnerID)
+	if err == nil {
+		owner.UpdatedAt = time.Now()
+		_, err = a.userRepo.UpdateUserBusinessDetails(ctx, *owner)
+		if err != nil {
+			a.logger.Error("Failed to update user business details timestamp", err, map[string]interface{}{
+				"user_id": companyInfo.OwnerID,
+			})
+			// Don't fail the whole operation for this
+		}
 	}
 
 	a.logger.Info("Business details updated successfully", map[string]interface{}{
-		"user_id": companyInfo.UserID,
+		"owner_id":   companyInfo.OwnerID,
+		"company_id": businessResult.ID,
 	})
 
 	return businessResult, nil
 }
 
 // RegisterAddressDetails implements ports.AuthService
-func (a *authService) RegisterAddressDetails(ctx context.Context, user domain.User) (*domain.User, error) {
+func (a *authService) RegisterAddressDetails(ctx context.Context, userId uuid.UUID, userAddress, userCity, userPostalCode, residentialCountry string) (*domain.User, error) {
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterAddressDetails")
 	defer span.End()
+	
 	a.logger.Info("Starting address details update process", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": userId,
 	})
 
 	// Get the existing user by ID
-	existingUser, err := a.userRepo.GetUserByID(ctx, user.ID)
+	existingUser, err := a.userRepo.GetUserByID(ctx, userId)
 	if err != nil {
 		a.logger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": user.ID,
+			"user_id": userId,
 		})
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
 
-	// Update only the address details fields, keeping other fields as they are
-	updatedUser := *existingUser
-
-	if user.UserAddress != nil {
-		updatedUser.UserAddress = user.UserAddress
-	}
-
-	if user.City != "" {
-		updatedUser.City = user.City
-	}
-
-	if user.PostalCode != "" {
-		updatedUser.PostalCode = user.PostalCode
-	}
-
-	// Update the user with address details
-	result, err := a.userRepo.UpdateUserAddressDetails(ctx, updatedUser)
+	// Check if personal user already exists
+	existingPersonalUser, err := a.userRepo.GetPersonalUserByUserID(ctx, userId)
 	if err != nil {
-		a.logger.Error("Failed to update address details", err, map[string]interface{}{
-			"user_id": user.ID,
+		// If personal user doesn't exist, create a new one with address details
+		if err.Error() == "no rows in result set" || err.Error() == "sql: no rows in result set" {
+			personalUser := domain.PersonalUser{
+				ID:                 uuid.New(),
+				UserID:             userId,
+				UserAddress:        &userAddress,
+				UserCity:           &userCity,
+				UserPostalCode:     &userPostalCode,
+				ResidentialCountry: &residentialCountry,
+				KYCStatus:          "pending", // Default KYC status
+				CreatedAt:          time.Now(),
+				UpdatedAt:          time.Now(),
+			}
+
+			// Only set non-empty values
+			if userAddress == "" {
+				personalUser.UserAddress = nil
+			}
+			if userCity == "" {
+				personalUser.UserCity = nil
+			}
+			if userPostalCode == "" {
+				personalUser.UserPostalCode = nil
+			}
+			if residentialCountry == "" {
+				personalUser.ResidentialCountry = nil
+			}
+
+			_, err := a.userRepo.CreatePersonalUser(ctx, personalUser)
+			if err != nil {
+				a.logger.Error("Failed to create personal user with address details", err, map[string]interface{}{
+					"user_id": userId,
+				})
+				span.RecordError(err)
+				return nil, fmt.Errorf("failed to create personal user with address details: %w", err)
+			}
+
+			a.logger.Info("Personal user created with address details", map[string]interface{}{
+				"user_id": userId,
+			})
+
+		} else {
+			a.logger.Error("Failed to get personal user by user ID", err, map[string]interface{}{
+				"user_id": userId,
+			})
+			span.RecordError(err)
+			return nil, fmt.Errorf("failed to get personal user: %w", err)
+		}
+	} else {
+		// Update existing personal user with address details
+		updatedPersonalUser := *existingPersonalUser
+		
+		// Update address fields if provided
+		if userAddress != "" {
+			updatedPersonalUser.UserAddress = &userAddress
+		}
+		if userCity != "" {
+			updatedPersonalUser.UserCity = &userCity
+		}
+		if userPostalCode != "" {
+			updatedPersonalUser.UserPostalCode = &userPostalCode
+		}
+		if residentialCountry != "" {
+			updatedPersonalUser.ResidentialCountry = &residentialCountry
+		}
+		
+		updatedPersonalUser.UpdatedAt = time.Now()
+
+		_, err := a.userRepo.UpdatePersonalUser(ctx, updatedPersonalUser)
+		if err != nil {
+			a.logger.Error("Failed to update personal user address details", err, map[string]interface{}{
+				"user_id": userId,
+			})
+			span.RecordError(err)
+			return nil, fmt.Errorf("failed to update personal user address details: %w", err)
+		}
+
+		a.logger.Info("Personal user address details updated successfully", map[string]interface{}{
+			"user_id": userId,
 		})
-		return nil, fmt.Errorf("failed to update address details: %w", err)
+	}
+
+	// Update the main user record's updated_at timestamp
+	result, err := a.userRepo.UpdateUserAddressDetails(ctx, *existingUser)
+	if err != nil {
+		a.logger.Error("Failed to update user address timestamp", err, map[string]interface{}{
+			"user_id": userId,
+		})
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to update user address timestamp: %w", err)
 	}
 
 	a.logger.Info("Address details updated successfully", map[string]interface{}{
-		"user_id": user.ID,
+		"user_id": userId,
 	})
 
 	return result, nil
@@ -581,6 +856,7 @@ func (a *authService) CheckEmailExists(ctx context.Context, email string) (bool,
 func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken string, userAgent string, clientIP string) (*domain.User, *domain.Session, error) {
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "AuthenticateWithWeb3")
 	defer span.End()
+	
 	// Validate the Web3Auth token
 	claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
 	if err != nil {
@@ -592,8 +868,9 @@ func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken str
 	// Extract identity information
 	email := claims.Email
 	if email == "" {
+		err := errors.New("email not provided in Web3Auth token")
 		span.RecordError(err)
-		return nil, nil, errors.New("email not provided in Web3Auth token")
+		return nil, nil, err
 	}
 
 	// Check if user exists
@@ -610,31 +887,52 @@ func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken str
 
 		// Extract profile data from claims
 		firstName, lastName := extractNameFromClaims(claims)
-		profileImage := claims.ProfileImage
 
 		// Determine provider from verifier
 		authProvider := mapVerifierToProvider(claims.Verifier)
 
 		// Create new user
 		newUser := domain.User{
-			ID:                  uuid.New(),
-			Email:               email,
-			FirstName:           firstName,
-			LastName:            lastName,
-			ProfilePicture:      &profileImage,
-			ProviderID:          claims.VerifierID,
-			AuthProvider:        string(authProvider),
-			AccountType:         "personal", // Default value, can be updated later
-			PersonalAccountType: "user",     // Default value, can be updated later
-			Nationality:         "unknown",  // Default value, can be updated later
+			ID:                uuid.New(),
+			Email:             email,
+			FirstName:         firstName,
+			LastName:          lastName,
+			ProfilePictureURL: &claims.ProfileImage, // Use the correct field name
+			ProviderID:        &claims.VerifierID,   // This should be a pointer
+			AuthProvider:      string(authProvider),
+			AccountType:       "personal", // Default value, can be updated later
+			EmailVerified:     true,       // Web3Auth emails are typically verified
+			AccountStatus:     "active",   // Set default account status
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
 
 		user, err = a.userRepo.CreateUser(ctx, newUser)
 		if err != nil {
+			span.RecordError(err)
 			return nil, nil, fmt.Errorf("failed to create user: %w", err)
 		}
 
 		isNewUser = true
+
+		// Create personal user profile with additional details
+		personalUser := domain.PersonalUser{
+			ID:                  uuid.New(),
+			UserID:              user.ID,
+			PersonalAccountType: stringPtr("user"), // Default value, can be updated later
+			Nationality:         stringPtr("unknown"), // Default value, can be updated later
+			KYCStatus:           "pending",
+			CreatedAt:           time.Now(),
+			UpdatedAt:           time.Now(),
+		}
+
+		_, err = a.userRepo.CreatePersonalUser(ctx, personalUser)
+		if err != nil {
+			// Log error but don't fail the authentication
+			a.logger.Error("Failed to create personal user profile", err, map[string]interface{}{
+				"user_id": user.ID,
+			})
+		}
 
 		// Track registration event
 		a.LogSecurityEvent(ctx, "user_registered", user.ID, map[string]interface{}{
@@ -649,9 +947,8 @@ func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken str
 		updateNeeded := false
 
 		// Update profile picture if new one available
-		if claims.ProfileImage != "" && (user.ProfilePicture == nil || *user.ProfilePicture != claims.ProfileImage) {
-			profileImage := claims.ProfileImage
-			user.ProfilePicture = &profileImage
+		if claims.ProfileImage != "" && (user.ProfilePictureURL == nil || *user.ProfilePictureURL != claims.ProfileImage) {
+			user.ProfilePictureURL = &claims.ProfileImage
 			updateNeeded = true
 		}
 
@@ -664,7 +961,13 @@ func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken str
 		}
 
 		if updateNeeded {
-			a.userRepo.UpdateUser(ctx, *user)
+			user.UpdatedAt = time.Now()
+			_, err := a.userRepo.UpdateUser(ctx, *user)
+			if err != nil {
+				a.logger.Error("Failed to update user profile", err, map[string]interface{}{
+					"user_id": user.ID,
+				})
+			}
 		}
 	}
 
@@ -686,6 +989,7 @@ func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken str
 	// Create session for the user
 	session, err := a.CreateSession(ctx, user.ID, userAgent, clientIP, webAuthToken, user.Email, "web3auth")
 	if err != nil {
+		span.RecordError(err)
 		return nil, nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
@@ -700,6 +1004,11 @@ func (a *authService) AuthenticateWithWeb3(ctx context.Context, webAuthToken str
 	go a.detectSuspiciousActivity(context.Background(), user.ID, clientIP, userAgent)
 
 	return user, session, nil
+}
+
+// Helper function to create string pointer
+func stringPtr(s string) *string {
+	return &s
 }
 
 // processWallet handles wallet data from Web3Auth
@@ -770,7 +1079,19 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 	// Get user data
 	user, err := a.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Get personal user data (may not exist)
+	personalUser, err := a.userRepo.GetPersonalUserByUserID(ctx, userID)
+	if err != nil {
+		// If personal user doesn't exist, we'll treat all personal fields as incomplete
+		a.logger.Info("Personal user not found, treating personal fields as incomplete", map[string]interface{}{
+			"user_id": userID,
+			"error":   err.Error(),
+		})
+		personalUser = nil
 	}
 
 	// Define required fields
@@ -780,19 +1101,52 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 		value    interface{}
 	}
 
-	// Common required fields
+	// Common required fields from main user table
 	fields := []fieldCheck{
 		{"First Name", true, user.FirstName != ""},
 		{"Last Name", true, user.LastName != ""},
-		{"Nationality", true, user.Nationality != "" && user.Nationality != "unknown"},
+		{"Phone Number", true, user.PhoneNumber != ""},
+		{"Email Verified", true, user.EmailVerified},
 	}
 
-	// Account type specific fields
-	fields = append(fields, []fieldCheck{
-		{"Address", true, user.UserAddress != nil && *user.UserAddress != ""},
-		{"City", true, user.City != ""},
-		{"Postal Code", true, user.PostalCode != ""},
-	}...)
+	// Personal user fields (if personal user exists)
+	if personalUser != nil {
+		fields = append(fields, []fieldCheck{
+			{"Nationality", true, personalUser.Nationality != nil && *personalUser.Nationality != "" && *personalUser.Nationality != "unknown"},
+			{"Address", true, personalUser.UserAddress != nil && *personalUser.UserAddress != ""},
+			{"City", true, personalUser.UserCity != nil && *personalUser.UserCity != ""},
+			{"Postal Code", true, personalUser.UserPostalCode != nil && *personalUser.UserPostalCode != ""},
+			{"Gender", false, personalUser.Gender != nil && *personalUser.Gender != ""}, // Optional field
+			{"Date of Birth", false, personalUser.DateOfBirth != nil}, // Optional field
+		}...)
+	} else {
+		// If no personal user, add these as incomplete required fields
+		fields = append(fields, []fieldCheck{
+			{"Nationality", true, false},
+			{"Address", true, false},
+			{"City", true, false},
+			{"Postal Code", true, false},
+			{"Gender", false, false},
+			{"Date of Birth", false, false},
+		}...)
+	}
+
+	// Account type specific additional fields
+	switch user.AccountType {
+	case "business", "company":
+		// Add business-specific fields if needed
+		// fields = append(fields, []fieldCheck{
+		//     {"Business Name", true, /* check business fields */},
+		// }...)
+	case "personal":
+		// Personal account might need additional fields
+		if personalUser != nil {
+			fields = append(fields, []fieldCheck{
+				{"Employment Type", false, personalUser.EmploymentType != nil && *personalUser.EmploymentType != ""},
+				{"Job Role", false, personalUser.JobRole != nil && *personalUser.JobRole != ""},
+			}...)
+		}
+	}
 
 	// Calculate completion percentage
 	var completedFields, requiredFields int
@@ -832,6 +1186,19 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 		requiredActions = append(requiredActions, "complete_profile")
 	}
 
+	// Add specific actions based on missing fields
+	if personalUser == nil {
+		requiredActions = append(requiredActions, "create_personal_profile")
+	}
+
+	if !user.EmailVerified {
+		requiredActions = append(requiredActions, "verify_email")
+	}
+
+	if user.PhoneNumber != "" && !user.PhoneNumberVerified {
+		requiredActions = append(requiredActions, "verify_phone")
+	}
+
 	// Create profile completion response
 	completion := &domain.ProfileCompletion{
 		UserID:               userID,
@@ -839,6 +1206,13 @@ func (a *authService) GetProfileCompletionStatus(ctx context.Context, userID uui
 		MissingFields:        missingFields,
 		RequiredActions:      requiredActions,
 	}
+
+	a.logger.Info("Profile completion calculated", map[string]interface{}{
+		"user_id":              userID,
+		"completion_percentage": percentage,
+		"missing_fields":       len(missingFields),
+		"required_actions":     len(requiredActions),
+	})
 
 	return completion, nil
 }
@@ -966,6 +1340,8 @@ func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userA
 		return nil, fmt.Errorf("failed to create refresh token: %w", err)
 	}
 
+	expiresAt := time.Now().Add(a.config.RefreshTokenDuration)
+
 	// Create session
 	session := domain.Session{
 		ID:               uuid.New(),
@@ -975,9 +1351,8 @@ func (a *authService) CreateSession(ctx context.Context, userID uuid.UUID, userA
 		UserAgent:        userAgent,
 		ClientIP:         clientIP,
 		IsBlocked:        false,
-		MFAEnabled:       false,
 		UserLoginType:    loginType,
-		ExpiresAt:        time.Now().Add(a.config.AccessTokenDuration),
+		ExpiresAt:        &expiresAt,
 		CreatedAt:        time.Now(),
 	}
 
@@ -1083,7 +1458,7 @@ func (a *authService) RefreshToken(ctx context.Context, refreshToken, userAgent,
 	}
 
 	// Validate session
-	if session == nil || session.IsBlocked || time.Now().After(session.ExpiresAt) {
+	if session == nil || session.IsBlocked || time.Now().After(*session.ExpiresAt) {
 		span.RecordError(err)
 		return nil, "", errors.New("invalid or expired refresh token")
 	}

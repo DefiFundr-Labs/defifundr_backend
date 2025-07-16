@@ -9,18 +9,33 @@ import (
 )
 
 type UserRepository interface {
+	// Core User operations
 	CreateUser(ctx context.Context, user domain.User) (*domain.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
-	GetUserCompanyInfo(ctx context.Context, id uuid.UUID) (*domain.CompanyInfo, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	UpdateUser(ctx context.Context, user domain.User) (*domain.User, error)
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
+	CheckEmailExists(ctx context.Context, email string) (bool, error)
 	UpdateUserPersonalDetails(ctx context.Context, user domain.User) (*domain.User, error)
 	UpdateUserAddressDetails(ctx context.Context, user domain.User) (*domain.User, error)
-	UpdateUserBusinessDetails(context.Context, domain.CompanyInfo) (*domain.CompanyInfo, error)
+	UpdateUserBusinessDetails(ctx context.Context, user domain.User) (*domain.User, error) // Fixed signature
 	DeactivateUser(ctx context.Context, id uuid.UUID) error
-	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	
+	// Personal User operations
+	CreatePersonalUser(ctx context.Context, personalUser domain.PersonalUser) (*domain.PersonalUser, error)
+	GetPersonalUserByID(ctx context.Context, id uuid.UUID) (*domain.PersonalUser, error)
+	GetPersonalUserByUserID(ctx context.Context, userID uuid.UUID) (*domain.PersonalUser, error)
+	UpdatePersonalUser(ctx context.Context, personalUser domain.PersonalUser) (*domain.PersonalUser, error)
+	DeletePersonalUser(ctx context.Context, id uuid.UUID) error
+	
+	// Company User operations
+	CreateCompanyUser(ctx context.Context, companyUser domain.CompanyUser) (*domain.CompanyUser, error)
+	GetCompanyUserByID(ctx context.Context, id uuid.UUID) (*domain.CompanyUser, error)
+	UpdateCompanyUser(ctx context.Context, companyUser domain.CompanyUser) (*domain.CompanyUser, error)
+	DeleteCompanyUser(ctx context.Context, id uuid.UUID) error
+	
+	// MFA operations (placeholder implementations)
 	SetMFASecret(ctx context.Context, userID uuid.UUID, secret string) error
 	GetMFASecret(ctx context.Context, userID uuid.UUID) (string, error)
 }
@@ -41,7 +56,7 @@ type WalletRepository interface {
 type SecurityRepository interface {
 	LogSecurityEvent(ctx context.Context, event domain.SecurityEvent) error
 	GetRecentLoginsByUserID(ctx context.Context, userID uuid.UUID, limit int) ([]domain.SecurityEvent, error)
-	GetSecurityEventsByUserID(ctx context.Context, userID uuid.UUID, eventType string, startTime, endTime time.Time) ([]domain.SecurityEvent, error)
+	GetSecurityEventsByUserID(ctx context.Context, userID uuid.UUID,  companyID uuid.UUID, eventType string, startTime, endTime time.Time) ([]domain.SecurityEvent, error)
 }
 
 // Update SessionRepository interface
@@ -86,4 +101,56 @@ type WaitlistRepository interface {
 	GetWaitlistEntryByReferralCode(ctx context.Context, code string) (*domain.WaitlistEntry, error)
 	ListWaitlistEntries(ctx context.Context, limit, offset int, filters map[string]string) ([]domain.WaitlistEntry, int64, error)
 	ExportWaitlistToCsv(ctx context.Context) ([]byte, error)
+}
+
+// Company interfaces
+type CompanyRepository interface {
+	CreateCompany(ctx context.Context, company domain.Company) (*domain.Company, error)
+	GetCompanyByID(ctx context.Context, id uuid.UUID) (*domain.Company, error)
+	GetCompanyByOwnerID(ctx context.Context, ownerID uuid.UUID) (*domain.Company, error)
+	UpdateCompany(ctx context.Context, company domain.Company) (*domain.Company, error)
+	UpdateCompanyKYB(ctx context.Context, companyID uuid.UUID, kybStatus string, verifiedAt *time.Time, method, provider, rejectionReason *string) (*domain.Company, error)
+	ListCompanies(ctx context.Context, limit, offset int) ([]*domain.CompanyWithOwner, error)
+}
+
+// Personal User interfaces
+type PersonalUserRepository interface {
+	CreatePersonalUser(ctx context.Context, personalUser domain.PersonalUser) (*domain.PersonalUser, error)
+	GetPersonalUserByID(ctx context.Context, id uuid.UUID) (*domain.PersonalUser, error)
+	GetPersonalUserByUserID(ctx context.Context, userID uuid.UUID) (*domain.PersonalUser, error)
+	GetPersonalUserWithUserDetails(ctx context.Context, id uuid.UUID) (*domain.UserWithPersonalInfo, error)
+	UpdatePersonalUser(ctx context.Context, personalUser domain.PersonalUser) (*domain.PersonalUser, error)
+	DeletePersonalUser(ctx context.Context, id uuid.UUID) error
+	ListPersonalUsers(ctx context.Context, limit, offset int) ([]*domain.PersonalUser, error)
+	GetPersonalUsersByKYCStatus(ctx context.Context, kycStatus string, limit, offset int) ([]*domain.PersonalUser, error)
+}
+
+// Company User interfaces
+type CompanyUserRepository interface {
+	CreateCompanyUser(ctx context.Context, companyUser domain.CompanyUser) (*domain.CompanyUser, error)
+	GetCompanyUserByID(ctx context.Context, id uuid.UUID) (*domain.CompanyUser, error)
+	GetCompanyUserByCompanyAndUser(ctx context.Context, companyID, userID uuid.UUID) (*domain.CompanyUser, error)
+	UpdateCompanyUser(ctx context.Context, companyUser domain.CompanyUser) (*domain.CompanyUser, error)
+	DeactivateCompanyUser(ctx context.Context, id uuid.UUID) (*domain.CompanyUser, error)
+	DeleteCompanyUser(ctx context.Context, id uuid.UUID) error
+	ListCompanyUsers(ctx context.Context, companyID uuid.UUID, limit, offset int) ([]*domain.CompanyUser, error)
+	GetCompanyAdministrators(ctx context.Context, companyID uuid.UUID) ([]*domain.CompanyUser, error)
+	GetUserCompanies(ctx context.Context, userID uuid.UUID) ([]*domain.CompanyUser, error)
+}
+
+
+// Company Employee interfaces
+type CompanyEmployeeRepository interface {
+	CreateCompanyEmployee(ctx context.Context, employee domain.CompanyEmployee) (*domain.CompanyEmployee, error)
+	GetCompanyEmployeeByID(ctx context.Context, id uuid.UUID) (*domain.CompanyEmployee, error)
+	GetCompanyEmployeeByEmployeeID(ctx context.Context, companyID uuid.UUID, employeeID string) (*domain.CompanyEmployee, error)
+	UpdateCompanyEmployee(ctx context.Context, employee domain.CompanyEmployee) (*domain.CompanyEmployee, error)
+	UpdateEmployeeStatus(ctx context.Context, id uuid.UUID, status string, endDate *time.Time) (*domain.CompanyEmployee, error)
+	DeleteCompanyEmployee(ctx context.Context, id uuid.UUID) error
+	ListCompanyEmployees(ctx context.Context, companyID uuid.UUID, limit, offset int) ([]*domain.CompanyEmployee, error)
+	GetActiveEmployees(ctx context.Context, companyID uuid.UUID, limit, offset int) ([]*domain.CompanyEmployee, error)
+	GetEmployeesByDepartment(ctx context.Context, companyID uuid.UUID, department string, limit, offset int) ([]*domain.CompanyEmployee, error)
+	GetEmployeesByManager(ctx context.Context, managerID uuid.UUID) ([]*domain.CompanyEmployee, error)
+	CountCompanyEmployees(ctx context.Context, companyID uuid.UUID) (int64, error)
+	CountActiveEmployees(ctx context.Context, companyID uuid.UUID) (int64, error)
 }

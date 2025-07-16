@@ -144,6 +144,7 @@ CREATE INDEX idx_company_users_user_id ON company_users(user_id);
 CREATE INDEX idx_company_employees_company_id ON company_employees(company_id);
 CREATE INDEX idx_company_employees_user_id ON company_employees(user_id);
 
+
 -- +goose Down
 DROP TABLE IF EXISTS company_employees CASCADE;
 DROP TABLE IF EXISTS company_users CASCADE;

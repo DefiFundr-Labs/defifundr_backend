@@ -41,7 +41,7 @@ func RegisterAuthRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, t
     {
         // User profile completion
         authenticatedRoutes.PUT("/profile/personal-details", authHandler.UpdatePersonalDetails)
-        authenticatedRoutes.PUT("/profile/address", authHandler.UpdateAddressDetails)
+        // authenticatedRoutes.PUT("/profile/address", authHandler.UpdateAddressDetails)
         authenticatedRoutes.PUT("/profile/business", authHandler.UpdateBusinessDetails)
         authenticatedRoutes.GET("/profile/completion", authHandler.GetProfileCompletion)
 

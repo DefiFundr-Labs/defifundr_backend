@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
-	"github.com/demola234/defifundr/pkg/tracing"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/demola234/defifundr/pkg/tracing"
 
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
@@ -43,9 +44,38 @@ func (u *userService) GetUserByID(ctx context.Context, userID uuid.UUID) (*domai
 	}
 
 	// Remove sensitive information
-	user.Password = nil
+	user.PasswordHash = ""
 
 	return user, nil
+}
+
+// GetUserByID implements ports.UserService.
+func (u *userService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "GetUserByID")
+	defer span.End()
+	user, err := u.userRepo.GetUserByEmail(ctx, email)
+	if err != nil {
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to get user with email %s: %w", email, err)
+	}
+
+	// Remove sensitive information
+	user.PasswordHash = ""
+
+	return user, nil
+}
+
+
+func (u *userService) GetPersonalUserByUserID(ctx context.Context, userID uuid.UUID) (*domain.PersonalUser, error) {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "GetPersonalUserUserByID")
+	defer span.End()
+	personalUser, err := u.userRepo.GetPersonalUserByUserID(ctx, userID)
+	if err != nil {
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to get personal user with id %s: %w", userID, err)
+	}
+
+	return personalUser, nil
 }
 
 // UpdateUser implements ports.UserService.
@@ -59,7 +89,7 @@ func (u *userService) UpdateUser(ctx context.Context, user domain.User) (*domain
 	}
 
 	// Preserve fields that shouldn't be updated through this method
-	user.Password = existingUser.Password
+	user.PasswordHash = existingUser.PasswordHash
 	user.CreatedAt = existingUser.CreatedAt
 	user.UpdatedAt = time.Now()
 
@@ -70,7 +100,7 @@ func (u *userService) UpdateUser(ctx context.Context, user domain.User) (*domain
 	}
 
 	// Remove sensitive information
-	updatedUser.Password = nil
+	updatedUser.PasswordHash = ""
 
 	return updatedUser, nil
 }
@@ -86,7 +116,7 @@ func (u *userService) UpdatePassword(ctx context.Context, userID uuid.UUID, oldP
 	}
 
 	// Verify old password
-	if err := utils.CheckPassword(oldPassword, *user.Password); err != nil {
+	if err := utils.CheckPassword(oldPassword, *&user.PasswordHash); err != nil {
 		return errors.New("incorrect old password")
 	}
 

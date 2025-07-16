@@ -119,6 +119,58 @@ SELECT COUNT(*) FROM users WHERE deleted_at IS NULL;
 SELECT COUNT(*) FROM users 
 WHERE account_type = @account_type AND deleted_at IS NULL;
 
+-- name: GetUser :one
+SELECT * FROM users 
+WHERE id = @id AND deleted_at IS NULL;
+
+-- name: UpdateUserPassword :exec
+UPDATE users SET
+  password_hash = @password_hash,
+  updated_at = NOW()
+WHERE id = @id;
+
+-- name: CheckEmailExists :one
+SELECT EXISTS(
+  SELECT 1 FROM users 
+  WHERE email = @email AND deleted_at IS NULL
+) as exists;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = @id;
+
+-- name: UpdateUserPersonalDetails :one
+UPDATE users SET
+  phone_number = COALESCE(@phone_number, phone_number),
+  updated_at = NOW()
+WHERE id = @id AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateUserCompanyDetails :one
+UPDATE users SET
+  updated_at = NOW()
+WHERE id = @id AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateUserAddress :one
+UPDATE users SET
+  updated_at = NOW()
+WHERE id = @id AND deleted_at IS NULL
+RETURNING *;
+
+-- name: VerifyEmail :exec
+UPDATE users SET
+  email_verified = TRUE,
+  email_verified_at = NOW(),
+  updated_at = NOW()
+WHERE id = @id;
+
+-- name: VerifyPhoneNumber :exec
+UPDATE users SET
+  phone_number_verified = TRUE,
+  phone_number_verified_at = NOW(),
+  updated_at = NOW()
+WHERE id = @id;
+
 -- ================================
 -- PERSONAL_USERS TABLE QUERIES
 -- ================================
@@ -233,165 +285,6 @@ LIMIT @limit_val OFFSET @offset_val;
 -- name: GetPersonalUsersByKYCStatus :many
 SELECT * FROM personal_users 
 WHERE kyc_status = @kyc_status
-ORDER BY created_at DESC
-LIMIT @limit_val OFFSET @offset_val;
-
--- ================================
--- COMPANIES TABLE QUERIES
--- ================================
-
--- name: CreateCompany :one
-INSERT INTO companies (
-  id,
-  owner_id,
-  company_name,
-  company_email,
-  company_phone,
-  company_size,
-  company_industry,
-  company_description,
-  company_headquarters,
-  company_logo,
-  company_website,
-  primary_contact_name,
-  primary_contact_email,
-  primary_contact_phone,
-  company_address,
-  company_city,
-  company_postal_code,
-  company_country,
-  company_registration_number,
-  registration_country,
-  tax_id,
-  incorporation_date,
-  account_status,
-  kyb_status,
-  kyb_verified_at,
-  kyb_verification_method,
-  kyb_verification_provider,
-  kyb_rejection_reason,
-  legal_entity_type,
-  created_at,
-  updated_at
-) VALUES (
-  COALESCE(@id, uuid_generate_v4()),
-  @owner_id,
-  @company_name,
-  @company_email,
-  @company_phone,
-  @company_size,
-  @company_industry,
-  @company_description,
-  @company_headquarters,
-  @company_logo,
-  @company_website,
-  @primary_contact_name,
-  @primary_contact_email,
-  @primary_contact_phone,
-  @company_address,
-  @company_city,
-  @company_postal_code,
-  @company_country,
-  @company_registration_number,
-  @registration_country,
-  @tax_id,
-  @incorporation_date,
-  COALESCE(@account_status, 'pending'),
-  COALESCE(@kyb_status, 'pending'),
-  @kyb_verified_at,
-  @kyb_verification_method,
-  @kyb_verification_provider,
-  @kyb_rejection_reason,
-  @legal_entity_type,
-  COALESCE(@created_at, NOW()),
-  COALESCE(@updated_at, NOW())
-) RETURNING *;
-
--- name: GetCompanyByID :one
-SELECT * FROM companies WHERE id = @id;
-
--- name: GetCompanyByOwnerID :one
-SELECT * FROM companies WHERE owner_id = @owner_id;
-
--- name: GetCompanyWithOwnerDetails :one
-SELECT 
-  c.*,
-  u.first_name as owner_first_name,
-  u.last_name as owner_last_name,
-  u.email as owner_email
-FROM companies c
-JOIN users u ON c.owner_id = u.id
-WHERE c.id = @id AND u.deleted_at IS NULL;
-
--- name: UpdateCompany :one
-UPDATE companies SET
-  company_name = COALESCE(@company_name, company_name),
-  company_email = COALESCE(@company_email, company_email),
-  company_phone = COALESCE(@company_phone, company_phone),
-  company_size = COALESCE(@company_size, company_size),
-  company_industry = COALESCE(@company_industry, company_industry),
-  company_description = COALESCE(@company_description, company_description),
-  company_headquarters = COALESCE(@company_headquarters, company_headquarters),
-  company_logo = COALESCE(@company_logo, company_logo),
-  company_website = COALESCE(@company_website, company_website),
-  primary_contact_name = COALESCE(@primary_contact_name, primary_contact_name),
-  primary_contact_email = COALESCE(@primary_contact_email, primary_contact_email),
-  primary_contact_phone = COALESCE(@primary_contact_phone, primary_contact_phone),
-  company_address = COALESCE(@company_address, company_address),
-  company_city = COALESCE(@company_city, company_city),
-  company_postal_code = COALESCE(@company_postal_code, company_postal_code),
-  company_country = COALESCE(@company_country, company_country),
-  company_registration_number = COALESCE(@company_registration_number, company_registration_number),
-  registration_country = COALESCE(@registration_country, registration_country),
-  tax_id = COALESCE(@tax_id, tax_id),
-  incorporation_date = COALESCE(@incorporation_date, incorporation_date),
-  account_status = COALESCE(@account_status, account_status),
-  legal_entity_type = COALESCE(@legal_entity_type, legal_entity_type),
-  updated_at = NOW()
-WHERE id = @id
-RETURNING *;
-
--- name: UpdateCompanyKYB :one
-UPDATE companies SET
-  kyb_status = @kyb_status,
-  kyb_verified_at = @kyb_verified_at,
-  kyb_verification_method = @kyb_verification_method,
-  kyb_verification_provider = @kyb_verification_provider,
-  kyb_rejection_reason = @kyb_rejection_reason,
-  updated_at = NOW()
-WHERE id = @id
-RETURNING *;
-
--- name: DeleteCompany :exec
-DELETE FROM companies WHERE id = @id;
-
--- name: ListCompanies :many
-SELECT 
-  c.*,
-  u.first_name as owner_first_name,
-  u.last_name as owner_last_name,
-  u.email as owner_email
-FROM companies c
-JOIN users u ON c.owner_id = u.id
-WHERE u.deleted_at IS NULL
-ORDER BY c.created_at DESC
-LIMIT @limit_val OFFSET @offset_val;
-
--- name: GetCompaniesByKYBStatus :many
-SELECT * FROM companies 
-WHERE kyb_status = @kyb_status
-ORDER BY created_at DESC
-LIMIT @limit_val OFFSET @offset_val;
-
--- name: SearchCompaniesByName :many
-SELECT * FROM companies 
-WHERE company_name ILIKE '%' || @search_term || '%'
-ORDER BY company_name
-LIMIT @limit_val OFFSET @offset_val;
-
--- name: GetCompaniesByIndustry :many
-SELECT * FROM companies 
-WHERE company_industry = @company_industry
 ORDER BY created_at DESC
 LIMIT @limit_val OFFSET @offset_val;
 

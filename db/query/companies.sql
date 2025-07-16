@@ -112,3 +112,60 @@ UPDATE companies SET
   updated_at = NOW()
 WHERE id = @id
 RETURNING *;
+
+-- name: ListCompanies :many
+SELECT 
+  c.*,
+  u.first_name as owner_first_name,
+  u.last_name as owner_last_name,
+  u.email as owner_email
+FROM companies c
+JOIN users u ON c.owner_id = u.id
+ORDER BY c.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: DeleteCompany :exec
+DELETE FROM companies WHERE id = $1;
+
+-- name: GetCompanyByOwnerID :one
+SELECT * FROM companies WHERE owner_id = @owner_id;
+
+-- name: GetCompanyWithOwnerDetails :one
+SELECT 
+  c.*,
+  u.first_name as owner_first_name,
+  u.last_name as owner_last_name,
+  u.email as owner_email
+FROM companies c
+JOIN users u ON c.owner_id = u.id
+WHERE c.id = @id AND u.deleted_at IS NULL;
+
+
+-- name: UpdateCompanyKYB :one
+UPDATE companies SET
+  kyb_status = @kyb_status,
+  kyb_verified_at = @kyb_verified_at,
+  kyb_verification_method = @kyb_verification_method,
+  kyb_verification_provider = @kyb_verification_provider,
+  kyb_rejection_reason = @kyb_rejection_reason,
+  updated_at = NOW()
+WHERE id = @id
+RETURNING *;
+
+-- name: GetCompaniesByKYBStatus :many
+SELECT * FROM companies 
+WHERE kyb_status = @kyb_status
+ORDER BY created_at DESC
+LIMIT @limit_val OFFSET @offset_val;
+
+-- name: SearchCompaniesByName :many
+SELECT * FROM companies 
+WHERE company_name ILIKE '%' || @search_term || '%'
+ORDER BY company_name
+LIMIT @limit_val OFFSET @offset_val;
+
+-- name: GetCompaniesByIndustry :many
+SELECT * FROM companies 
+WHERE company_industry = @company_industry
+ORDER BY created_at DESC
+LIMIT @limit_val OFFSET @offset_val;

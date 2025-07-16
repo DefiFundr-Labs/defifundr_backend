@@ -112,7 +112,7 @@ Table company_users {
   updated_at TIMESTAMPTZ
 }
 
-Table company_staff_profiles {
+Table company_users {
   id UUID [pk, ref: > company_users.id]
   first_name VARCHAR(255)
   last_name VARCHAR(255)

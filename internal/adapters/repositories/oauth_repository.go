@@ -146,9 +146,9 @@ func (r *OAuthRepository) GetUserInfoFromProviderToken(ctx context.Context, prov
 			Email:          claims.Email,
 			FirstName:      firstName,
 			LastName:       lastName,
-			ProfilePicture: &profileImage,
+			ProfilePictureURL: &profileImage,
 			AuthProvider:   string(mapVerifierToProvider(claims.Verifier)),
-			ProviderID:     claims.VerifierID,
+			ProviderID:     &claims.VerifierID,
 		}
 
 		return user, nil

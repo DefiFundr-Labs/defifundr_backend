@@ -6,7 +6,7 @@ import (
 
 	"github.com/demola234/defifundr/internal/adapters/dto/request"
 	"github.com/demola234/defifundr/internal/adapters/dto/response"
-	"github.com/demola234/defifundr/internal/core/domain"
+	// "github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
 	"github.com/demola234/defifundr/pkg/app_errors"
 	"github.com/gin-gonic/gin"
@@ -114,106 +114,106 @@ func (h *UserHandler) GetProfile(ctx *gin.Context) {
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Router /users/profile [put]
-func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
-	spanCtx, span := tracing.Tracer("user-handler").Start(ctx.Request.Context(), "UpdateProfile")
-	defer span.End()
-	ctxWithSpan := ctx.Copy()
-	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
-	// Get user ID from context (set by auth middleware)
-	userID, exists := ctx.Get("user_id")
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
-			Message: "Unauthorized",
-		})
-		return
-	}
+// func (h *UserHandler) UpdateProfile(ctx *gin.Context) {
+// 	spanCtx, span := tracing.Tracer("user-handler").Start(ctx.Request.Context(), "UpdateProfile")
+// 	defer span.End()
+// 	ctxWithSpan := ctx.Copy()
+// 	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
+// 	// Get user ID from context (set by auth middleware)
+// 	userID, exists := ctx.Get("user_id")
+// 	if !exists {
+// 		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+// 			Message: "Unauthorized",
+// 		})
+// 		return
+// 	}
 
-	// Convert user ID to UUID
-	userUUID, ok := userID.(uuid.UUID)
-	if !ok {
-		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
-			Message: "Invalid user ID",
-		})
-		return
-	}
+// 	// Convert user ID to UUID
+// 	userUUID, ok := userID.(uuid.UUID)
+// 	if !ok {
+// 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+// 			Message: "Invalid user ID",
+// 		})
+// 		return
+// 	}
 
-	var req request.UpdateProfileRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: appErrors.ErrInvalidRequest.Error(),
-			Success: false,
-		})
-		return
-	}
+// 	var req request.UpdateProfileRequest
+// 	if err := ctx.ShouldBindJSON(&req); err != nil {
+// 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+// 			Message: appErrors.ErrInvalidRequest.Error(),
+// 			Success: false,
+// 		})
+// 		return
+// 	}
 
-	// Validate request data
-	if err := req.Validate(); err != nil {
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: appErrors.ErrInvalidRequest.Error(),
-			Success: false,
-		})
-		return
-	}
+// 	// Validate request data
+// 	if err := req.Validate(); err != nil {
+// 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+// 			Message: appErrors.ErrInvalidRequest.Error(),
+// 			Success: false,
+// 		})
+// 		return
+// 	}
 
-	// Get existing user
-	currentUser, err := h.userService.GetUserByID(ctxWithSpan, userUUID)
-	if err != nil {
-		span.RecordError(err)
-		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
-			Message: "Failed to retrieve user profile",
-		})
-		return
-	}
+// 	// Get existing user
+// 	currentUser, err := h.userService.GetUserByID(ctxWithSpan, userUUID)
+// 	if err != nil {
+// 		span.RecordError(err)
+// 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+// 			Message: "Failed to retrieve user profile",
+// 		})
+// 		return
+// 	}
 
-	// Update user object with new values
-	updatedUser := domain.User{
-		ID:                  userUUID,
-		Email:               currentUser.Email, // Email cannot be changed
-		FirstName:           req.FirstName,
-		LastName:            req.LastName,
-		AccountType:         currentUser.AccountType, // Account type cannot be changed
-		PersonalAccountType: currentUser.PersonalAccountType,
-		Nationality:         req.Nationality,
-		Gender:              &req.Gender,
-		ResidentialCountry:  &req.ResidentialCountry,
-		JobRole:             &req.JobRole,
-		EmploymentType:      &req.EmploymentType,
-	}
+// 	// Update user object with new values
+// 	updatedUser := domain.User{
+// 		ID:                  userUUID,
+// 		Email:               currentUser.Email, // Email cannot be changed
+// 		FirstName:           req.FirstName,
+// 		LastName:            req.LastName,
+// 		AccountType:         currentUser.AccountType, // Account type cannot be changed
+// 		PersonalAccountType: currentUser.PersonalAccountType,
+// 		Nationality:         req.Nationality,
+// 		Gender:              &req.Gender,
+// 		ResidentialCountry:  &req.ResidentialCountry,
+// 		JobRole:             &req.JobRole,
+// 		EmploymentType:      &req.EmploymentType,
+// 	}
 
-	// Update user profile
-	user, err := h.userService.UpdateUser(ctxWithSpan, updatedUser)
-	if err != nil {
-		span.RecordError(err)
-		errResponse := response.ErrorResponse{
-			Message: appErrors.ErrInternalServer.Error(),
-		}
+// 	// Update user profile
+// 	user, err := h.userService.UpdateUser(ctxWithSpan, updatedUser)
+// 	if err != nil {
+// 		span.RecordError(err)
+// 		errResponse := response.ErrorResponse{
+// 			Message: appErrors.ErrInternalServer.Error(),
+// 		}
 
-		if appErrors.IsAppError(err) {
-			appErr := err.(*appErrors.AppError)
-			errResponse.Message = appErr.Error()
-			ctx.JSON(http.StatusBadRequest, errResponse)
-			return
-		}
+// 		if appErrors.IsAppError(err) {
+// 			appErr := err.(*appErrors.AppError)
+// 			errResponse.Message = appErr.Error()
+// 			ctx.JSON(http.StatusBadRequest, errResponse)
+// 			return
+// 		}
 
-		ctx.JSON(http.StatusInternalServerError, errResponse)
-		return
-	}
+// 		ctx.JSON(http.StatusInternalServerError, errResponse)
+// 		return
+// 	}
 
-	// Create response DTO
-	userResponse := response.UserResponse{
-		ID:        user.ID.String(),
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	}
+// 	// Create response DTO
+// 	userResponse := response.UserResponse{
+// 		ID:        user.ID.String(),
+// 		Email:     user.Email,
+// 		FirstName: user.FirstName,
+// 		LastName:  user.LastName,
+// 		CreatedAt: user.CreatedAt,
+// 		UpdatedAt: user.UpdatedAt,
+// 	}
 
-	ctx.JSON(http.StatusOK, response.SuccessResponse{
-		Message: "User profile updated",
-		Data:    userResponse,
-	})
-}
+// 	ctx.JSON(http.StatusOK, response.SuccessResponse{
+// 		Message: "User profile updated",
+// 		Data:    userResponse,
+// 	})
+// }
 
 // ChangePassword godoc
 // @Summary Change user password
@@ -252,15 +252,6 @@ func (h *UserHandler) ChangePassword(ctx *gin.Context) {
 
 	var req request.UpdateUserPasswordRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Message: appErrors.ErrInvalidRequest.Error(),
-			Success: false,
-		})
-		return
-	}
-
-	// Validate request data
-	if err := req.Validate(); err != nil {
 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
 			Message: appErrors.ErrInvalidRequest.Error(),
 			Success: false,

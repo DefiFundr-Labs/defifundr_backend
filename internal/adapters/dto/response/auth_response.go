@@ -77,7 +77,7 @@ type UserWalletResponse struct {
 	ID        string `json:"id"`
 	Address   string `json:"address"`
 	Type      string `json:"type"`
-	Chain     string `json:"chain"`
+	Chain     int32 `json:"chain"`
 	IsDefault bool   `json:"is_default"`
 }
 

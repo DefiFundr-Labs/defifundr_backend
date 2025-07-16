@@ -1,3 +1,6 @@
+
+-- Add these exact queries to your auth.sql file to match your repository
+
 -- name: CreateSession :one
 INSERT INTO sessions (
   id,
@@ -35,10 +38,21 @@ INSERT INTO sessions (
 SELECT * FROM sessions 
 WHERE id = @id AND is_blocked = FALSE;
 
+-- name: GetSessionByRefreshToken :one
+SELECT * FROM sessions 
+WHERE refresh_token = @refresh_token AND is_blocked = FALSE;
+
 -- name: GetSessionsByUser :many
 SELECT * FROM sessions 
 WHERE user_id = @user_id AND is_blocked = FALSE
 ORDER BY last_used_at DESC;
+
+-- name: UpdateRefreshToken :one
+UPDATE sessions SET
+  refresh_token = @refresh_token,
+  last_used_at = NOW()
+WHERE id = @id
+RETURNING *;
 
 -- name: UpdateSessionLastUsed :exec
 UPDATE sessions SET
@@ -55,9 +69,8 @@ UPDATE sessions SET
   is_blocked = TRUE
 WHERE user_id = @user_id;
 
--- name: CleanupExpiredSessions :exec
-DELETE FROM sessions 
-WHERE expires_at < NOW() OR is_blocked = TRUE;
+-- name: DeleteSession :exec
+DELETE FROM sessions WHERE id = @id;
 
 -- name: CreateUserDevice :one
 INSERT INTO user_devices (

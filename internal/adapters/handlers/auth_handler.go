@@ -2,10 +2,11 @@ package handlers
 
 import (
 	"context"
-	"github.com/demola234/defifundr/pkg/tracing"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/demola234/defifundr/pkg/tracing"
 
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	"github.com/demola234/defifundr/internal/adapters/dto/request"
@@ -21,13 +22,15 @@ import (
 // AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
 	authService ports.AuthService
+	userService ports.UserService
 	logger      logging.Logger
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(authService ports.AuthService, logger logging.Logger) *AuthHandler {
+func NewAuthHandler(authService ports.AuthService, userService ports.UserService,logger logging.Logger) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
+		userService: userService,
 		logger:      logger,
 	}
 }
@@ -146,14 +149,14 @@ func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
 		UserID:        user.ID,
 		AccessToken:   session.OAuthAccessToken,
 		UserLoginType: session.UserLoginType,
-		ExpiresAt:     session.ExpiresAt,
+		ExpiresAt:     *session.ExpiresAt,
 		CreatedAt:     session.CreatedAt,
 	}
 
 	// Create user response
 	profilePicture := ""
-	if user.ProfilePicture != nil {
-		profilePicture = *user.ProfilePicture
+	if user.ProfilePictureURL != nil {
+		profilePicture = *user.ProfilePictureURL
 	}
 
 	userResponse := response.LoginUserResponse{
@@ -164,7 +167,7 @@ func (h *AuthHandler) Web3AuthLogin(ctx *gin.Context) {
 		FirstName:      user.FirstName,
 		LastName:       user.LastName,
 		AuthProvider:   user.AuthProvider,
-		ProviderID:     user.ProviderID,
+		ProviderID:     *user.ProviderID,
 		CreatedAt:      user.CreatedAt,
 		UpdatedAt:      user.UpdatedAt,
 	}
@@ -236,21 +239,22 @@ func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	// Create user domain object
-	user := domain.User{
-		ID:           uuid.New(),
-		Email:        req.Email,
-		FirstName:    req.FirstName,
-		LastName:     req.LastName,
-		AuthProvider: req.Provider,
-		WebAuthToken: req.WebAuthToken,
-		AccountType:  "personal",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+	existingUser, err := h.userService.GetUserByEmail(ctx, req.Email)
+	if err == nil && existingUser != nil {
+		h.logger.Warn("Registration attempt for existing email", map[string]interface{}{
+			"email": req.Email,
+		})
+		span.RecordError(err)
+		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+			Success: false,
+			Message: "Email already in use",
+		})
+		return
 	}
 
+
 	// Register user
-	createdUser, err := h.authService.RegisterUser(ctx, user, req.Password)
+	createdUser, err := h.authService.RegisterUser(ctx, req.Email, req.FirstName, req.LastName, req.Provider, req.WebAuthToken, req.Password)
 	if err != nil {
 		status := http.StatusInternalServerError
 		message := "Failed to register user"
@@ -315,7 +319,7 @@ func (h *AuthHandler) RegisterUser(ctx *gin.Context) {
 		UserID:        createdUser.ID,
 		AccessToken:   session.OAuthAccessToken,
 		UserLoginType: session.UserLoginType,
-		ExpiresAt:     session.ExpiresAt,
+		ExpiresAt:     *session.ExpiresAt,
 		CreatedAt:     session.CreatedAt,
 	}
 
@@ -381,14 +385,7 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		return
 	}
 
-	user := domain.User{
-		Email:        req.Email,
-		AuthProvider: req.Provider,
-		ProviderID:   req.ProviderID,
-		WebAuthToken: req.WebAuthToken,
-	}
-
-	loggedInUser, err := h.authService.Login(ctx, req.Email, user, req.Password)
+	loggedInUser, err := h.authService.Login(ctx, req.Email, req.Provider, req.ProviderID, req.WebAuthToken, req.Password)
 	if err != nil {
 		reqLogger.Error("Login failed", err, map[string]interface{}{
 			"email": req.Email,
@@ -411,8 +408,8 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 	}
 
 	profilePicture := ""
-	if loggedInUser.ProfilePicture != nil {
-		profilePicture = *loggedInUser.ProfilePicture
+	if loggedInUser.ProfilePictureURL != nil {
+		profilePicture = *loggedInUser.ProfilePictureURL
 	}
 
 	userResponse := response.LoginUserResponse{
@@ -423,7 +420,7 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		FirstName:      loggedInUser.FirstName,
 		LastName:       loggedInUser.LastName,
 		AuthProvider:   loggedInUser.AuthProvider,
-		ProviderID:     loggedInUser.ProviderID,
+		ProviderID:     *loggedInUser.ProviderID,
 		CreatedAt:      loggedInUser.CreatedAt,
 		UpdatedAt:      loggedInUser.UpdatedAt,
 	}
@@ -433,7 +430,7 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		UserID:        loggedInUser.ID,
 		AccessToken:   session.OAuthAccessToken,
 		UserLoginType: req.Provider,
-		ExpiresAt:     session.ExpiresAt,
+		ExpiresAt:     *session.ExpiresAt,
 		CreatedAt:     session.CreatedAt,
 	}
 
@@ -513,7 +510,7 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
 		UserID:        session.UserID,
 		AccessToken:   accessToken,
 		UserLoginType: session.UserLoginType,
-		ExpiresAt:     session.ExpiresAt,
+		ExpiresAt:     *session.ExpiresAt,
 		CreatedAt:     session.CreatedAt,
 	}
 
@@ -545,16 +542,16 @@ func (h *AuthHandler) RefreshToken(ctx *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/personal-details [put]
-
 func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdatePersonalDetails")
 	defer span.End()
 	ctxWithSpan := ctx.Copy()
 	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
+	
 	// Extract request ID
 	requestID, _ := ctx.Get("RequestID")
 	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing login request")
+	reqLogger.Debug("Processing personal details update request")
 
 	// Get authenticated user ID
 	userID, exists := ctx.Get("user_id")
@@ -588,32 +585,8 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 		return
 	}
 
-	// Get current user data
-	currentUser, err := h.authService.GetUserByID(ctx, userUUID)
-	if err != nil {
-		reqLogger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": userUUID,
-		})
-		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
-			Success: false,
-			Message: "Failed to retrieve user data",
-		})
-		return
-	}
-
-	// Update user with new details
-	currentUser.FirstName = req.FirstName
-	currentUser.LastName = req.LastName
-	currentUser.Nationality = req.Nationality
-	currentUser.PersonalAccountType = req.PersonalAccountType
-
-	if req.PhoneNumber != "" {
-		phoneNumber := req.PhoneNumber
-		currentUser.PhoneNumber = &phoneNumber
-	}
-
-	// Update user
-	updatedUser, err := h.authService.RegisterPersonalDetails(ctx, *currentUser)
+	// Update user personal details
+	updatedUser, err := h.authService.RegisterPersonalDetails(ctxWithSpan, userUUID, req.Nationality, req.DateOfBirth, req.Gender, req.PersonalAccountType, req.PhoneNumber)
 	if err != nil {
 		status := http.StatusInternalServerError
 		message := "Failed to update personal details"
@@ -626,6 +599,7 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 		reqLogger.Error("Failed to update personal details", err, map[string]interface{}{
 			"user_id": userUUID,
 		})
+		span.RecordError(err)
 
 		ctx.JSON(status, response.ErrorResponse{
 			Success: false,
@@ -634,27 +608,43 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 		return
 	}
 
-	// Create user response
-	profilePicture := ""
-	if updatedUser.ProfilePicture != nil {
-		profilePicture = *updatedUser.ProfilePicture
+	// Get personal user data for response
+	personalUser, err := h.userService.GetPersonalUserByUserID(ctxWithSpan, updatedUser.ID)
+	if err != nil {
+		reqLogger.Error("Failed to get personal user data", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
+		// Continue with basic user data if personal user fetch fails
 	}
 
+	// Build user response
 	userResponse := response.LoginUserResponse{
-		ID:                  updatedUser.ID.String(),
-		Email:               updatedUser.Email,
-		ProfilePicture:      profilePicture,
-		AccountType:         updatedUser.AccountType,
-		FirstName:           updatedUser.FirstName,
-		LastName:            updatedUser.LastName,
-		Nationality:         updatedUser.Nationality,
-		PersonalAccountType: updatedUser.PersonalAccountType,
-		CreatedAt:           updatedUser.CreatedAt,
-		UpdatedAt:           updatedUser.UpdatedAt,
+		ID:             updatedUser.ID.String(),
+		Email:          updatedUser.Email,
+		AccountType:    updatedUser.AccountType,
+		FirstName:      updatedUser.FirstName,
+		LastName:       updatedUser.LastName,
+		CreatedAt:      updatedUser.CreatedAt,
+		UpdatedAt:      updatedUser.UpdatedAt,
+	}
+
+	// Add profile picture if available
+	if updatedUser.ProfilePictureURL != nil {
+		userResponse.ProfilePicture = *updatedUser.ProfilePictureURL
+	}
+
+	// Add personal user data if available
+	if personalUser != nil {
+		if personalUser.Nationality != nil {
+			userResponse.Nationality = *personalUser.Nationality
+		}
+		if personalUser.PersonalAccountType != nil {
+			userResponse.PersonalAccountType = *personalUser.PersonalAccountType
+		}
 	}
 
 	// Get updated profile completion
-	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, updatedUser.ID)
+	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctxWithSpan, updatedUser.ID)
 	var completionData *response.ProfileCompletionResponse
 
 	if err == nil {
@@ -663,6 +653,10 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 			MissingFields:        profileCompletion.MissingFields,
 			RequiredActions:      profileCompletion.RequiredActions,
 		}
+	} else {
+		reqLogger.Error("Failed to get profile completion status", err, map[string]interface{}{
+			"user_id": userUUID,
+		})
 	}
 
 	// Return success
@@ -693,116 +687,116 @@ func (h *AuthHandler) UpdatePersonalDetails(ctx *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /auth/profile/address [put]
-func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
-	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdateAddressDetails")
-	defer span.End()
-	ctxWithSpan := ctx.Copy()
-	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
-	// Extract request ID
-	requestID, _ := ctx.Get("RequestID")
-	reqLogger := h.logger.With("request_id", requestID)
-	reqLogger.Debug("Processing login request")
+// func (h *AuthHandler) UpdateAddressDetails(ctx *gin.Context) {
+// 	spanCtx, span := tracing.Tracer("auth-handler").Start(ctx.Request.Context(), "UpdateAddressDetails")
+// 	defer span.End()
+// 	ctxWithSpan := ctx.Copy()
+// 	ctxWithSpan.Request = ctx.Request.WithContext(spanCtx)
+// 	// Extract request ID
+// 	requestID, _ := ctx.Get("RequestID")
+// 	reqLogger := h.logger.With("request_id", requestID)
+// 	reqLogger.Debug("Processing login request")
 
-	// Get authenticated user ID
-	userID, exists := ctx.Get("user_id")
-	if !exists {
-		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
-			Success: false,
-			Message: "Unauthorized",
-		})
-		return
-	}
+// 	// Get authenticated user ID
+// 	userID, exists := ctx.Get("user_id")
+// 	if !exists {
+// 		ctx.JSON(http.StatusUnauthorized, response.ErrorResponse{
+// 			Success: false,
+// 			Message: "Unauthorized",
+// 		})
+// 		return
+// 	}
 
-	// Convert to UUID
-	userUUID, ok := userID.(uuid.UUID)
-	if !ok {
-		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
-			Success: false,
-			Message: "Invalid user ID",
-		})
-		return
-	}
+// 	// Convert to UUID
+// 	userUUID, ok := userID.(uuid.UUID)
+// 	if !ok {
+// 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+// 			Success: false,
+// 			Message: "Invalid user ID",
+// 		})
+// 		return
+// 	}
 
-	var req request.RegisterAddressDetailsRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		reqLogger.Error("Invalid address details request format", err, map[string]interface{}{
-			"error": err.Error(),
-		})
-		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
-			Success: false,
-			Message: "Invalid request format: " + err.Error(),
-		})
-		return
-	}
+// 	var req request.RegisterAddressDetailsRequest
+// 	if err := ctx.ShouldBindJSON(&req); err != nil {
+// 		reqLogger.Error("Invalid address details request format", err, map[string]interface{}{
+// 			"error": err.Error(),
+// 		})
+// 		ctx.JSON(http.StatusBadRequest, response.ErrorResponse{
+// 			Success: false,
+// 			Message: "Invalid request format: " + err.Error(),
+// 		})
+// 		return
+// 	}
 
-	// Get current user data
-	currentUser, err := h.authService.GetUserByID(ctx, userUUID)
-	if err != nil {
-		reqLogger.Error("Failed to get user by ID", err, map[string]interface{}{
-			"user_id": userUUID,
-		})
-		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
-			Success: false,
-			Message: "Failed to retrieve user data",
-		})
-		return
-	}
+// 	// Get current user data
+// 	currentUser, err := h.authService.GetUserByID(ctx, userUUID)
+// 	if err != nil {
+// 		reqLogger.Error("Failed to get user by ID", err, map[string]interface{}{
+// 			"user_id": userUUID,
+// 		})
+// 		ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
+// 			Success: false,
+// 			Message: "Failed to retrieve user data",
+// 		})
+// 		return
+// 	}
 
-	// Update user with new details
-	userAddress := req.UserAddress
-	currentUser.UserAddress = &userAddress
-	currentUser.City = req.City
-	currentUser.PostalCode = req.PostalCode
-	currentUser.ResidentialCountry = &req.Country
+// 	// Update user with new details
+// 	userAddress := req.UserAddress
+// 	currentUser.UserAddress = &userAddress
+// 	currentUser.City = req.City
+// 	currentUser.PostalCode = req.PostalCode
+// 	currentUser.ResidentialCountry = &req.Country
 
-	// Update user
-	updatedUser, err := h.authService.RegisterAddressDetails(ctx, *currentUser)
-	if err != nil {
-		status := http.StatusInternalServerError
-		message := "Failed to update address details"
+// 	// Update user
+// 	updatedUser, err := h.authService.RegisterAddressDetails(ctx, *currentUser)
+// 	if err != nil {
+// 		status := http.StatusInternalServerError
+// 		message := "Failed to update address details"
 
-		if appErr, ok := err.(appErrors.AppError); ok {
-			status = appErr.StatusCode()
-			message = appErr.Error()
-		}
+// 		if appErr, ok := err.(appErrors.AppError); ok {
+// 			status = appErr.StatusCode()
+// 			message = appErr.Error()
+// 		}
 
-		reqLogger.Error("Failed to update address details", err, map[string]interface{}{
-			"user_id": userUUID,
-		})
+// 		reqLogger.Error("Failed to update address details", err, map[string]interface{}{
+// 			"user_id": userUUID,
+// 		})
 
-		ctx.JSON(status, response.ErrorResponse{
-			Success: false,
-			Message: message,
-		})
-		return
-	}
+// 		ctx.JSON(status, response.ErrorResponse{
+// 			Success: false,
+// 			Message: message,
+// 		})
+// 		return
+// 	}
 
-	// Get updated profile completion
-	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, updatedUser.ID)
-	var completionData *response.ProfileCompletionResponse
+// 	// Get updated profile completion
+// 	profileCompletion, err := h.authService.GetProfileCompletionStatus(ctx, updatedUser.ID)
+// 	var completionData *response.ProfileCompletionResponse
 
-	if err == nil {
-		completionData = &response.ProfileCompletionResponse{
-			CompletionPercentage: profileCompletion.CompletionPercentage,
-			MissingFields:        profileCompletion.MissingFields,
-			RequiredActions:      profileCompletion.RequiredActions,
-		}
-	}
+// 	if err == nil {
+// 		completionData = &response.ProfileCompletionResponse{
+// 			CompletionPercentage: profileCompletion.CompletionPercentage,
+// 			MissingFields:        profileCompletion.MissingFields,
+// 			RequiredActions:      profileCompletion.RequiredActions,
+// 		}
+// 	}
 
-	// Return success
-	ctx.JSON(http.StatusOK, response.SuccessResponse{
-		Success: true,
-		Message: "Address details updated successfully",
-		Data: map[string]interface{}{
-			"user":               updatedUser,
-			"profile_completion": completionData,
-		},
-	})
+// 	// Return success
+// 	ctx.JSON(http.StatusOK, response.SuccessResponse{
+// 		Success: true,
+// 		Message: "Address details updated successfully",
+// 		Data: map[string]interface{}{
+// 			"user":               updatedUser,
+// 			"profile_completion": completionData,
+// 		},
+// 	})
 
-	reqLogger.Info("Address details updated successfully", map[string]interface{}{
-		"user_id": updatedUser.ID,
-	})
-}
+// 	reqLogger.Info("Address details updated successfully", map[string]interface{}{
+// 		"user_id": updatedUser.ID,
+// 	})
+// }
 
 // UpdateBusinessDetails handles updating a user's business details
 // @Summary Update business details
@@ -861,16 +855,13 @@ func (h *AuthHandler) UpdateBusinessDetails(ctx *gin.Context) {
 		return
 	}
 
-	// Create user domain object
-	accountType := req.AccountType
-	userDetails := domain.CompanyInfo{
-		UserID:              user.UserID,
-		CompanyName:         &req.CompanyName,
+	userDetails := domain.Company{
+		OwnerID:              user.UserID,
+		CompanyName:         req.CompanyName,
 		CompanySize:         &req.CompanySize,
 		CompanyIndustry:     &req.CompanyIndustry,
 		CompanyDescription:  &req.CompanyDescription,
 		CompanyHeadquarters: &req.CompanyCountry,
-		AccountType:         accountType,
 	}
 
 	// Update user

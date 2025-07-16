@@ -105,7 +105,7 @@ CREATE TABLE "company_users" (
   "updated_at" TIMESTAMPTZ
 );
 
-CREATE TABLE "company_staff_profiles" (
+CREATE TABLE "company_users" (
   "id" UUID PRIMARY KEY,
   "first_name" VARCHAR(255),
   "last_name" VARCHAR(255),
@@ -998,9 +998,9 @@ ALTER TABLE "company_users" ADD FOREIGN KEY ("user_id") REFERENCES "users" ("id"
 
 ALTER TABLE "company_users" ADD FOREIGN KEY ("added_by") REFERENCES "users" ("id");
 
-ALTER TABLE "company_staff_profiles" ADD FOREIGN KEY ("id") REFERENCES "company_users" ("id");
+ALTER TABLE "company_users" ADD FOREIGN KEY ("id") REFERENCES "company_users" ("id");
 
-ALTER TABLE "company_staff_profiles" ADD FOREIGN KEY ("reports_to") REFERENCES "company_users" ("id");
+ALTER TABLE "company_users" ADD FOREIGN KEY ("reports_to") REFERENCES "company_users" ("id");
 
 ALTER TABLE "company_employees" ADD FOREIGN KEY ("company_id") REFERENCES "companies" ("id");
 

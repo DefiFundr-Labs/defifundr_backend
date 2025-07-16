@@ -142,6 +142,15 @@ INSERT INTO user_wallets (
   COALESCE(@updated_at, NOW())
 ) RETURNING *;
 
+-- name: GetWalletByAddress :one
+SELECT * FROM user_wallets 
+WHERE wallet_address = @wallet_address;
+
+-- name: GetWalletsByUserID :many
+SELECT * FROM user_wallets 
+WHERE user_id = @user_id
+ORDER BY is_default DESC, created_at DESC;
+
 -- name: GetUserWalletsByUser :many
 SELECT uw.*, sn.name as network_name
 FROM user_wallets uw
@@ -176,3 +185,18 @@ WHERE user_id = @user_id AND chain_id = @chain_id;
 
 -- name: DeleteUserWallet :exec
 DELETE FROM user_wallets WHERE id = @id;
+
+-- name: GetWalletByID :one
+SELECT * FROM user_wallets 
+WHERE id = @id;
+
+-- name: GetDefaultWalletByUser :one
+SELECT * FROM user_wallets 
+WHERE user_id = @user_id AND is_default = TRUE
+LIMIT 1;
+
+-- name: CheckWalletExists :one
+SELECT EXISTS(
+  SELECT 1 FROM user_wallets 
+  WHERE wallet_address = @wallet_address AND chain_id = @chain_id
+) as exists;

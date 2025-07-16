@@ -7,8 +7,8 @@ import (
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/infrastructure/common/utils"
 	"github.com/demola234/defifundr/internal/core/domain"
-	"github.com/google/uuid"
 	"github.com/demola234/defifundr/pkg/tracing"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 

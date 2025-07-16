@@ -9,7 +9,6 @@ import (
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/google/uuid"
 	"github.com/demola234/defifundr/pkg/tracing"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type SecurityRepository struct {
@@ -26,13 +25,17 @@ func NewSecurityRepository(store db.Queries) *SecurityRepository {
 func (r *SecurityRepository) LogSecurityEvent(ctx context.Context, event domain.SecurityEvent) error {
 	ctx, span := tracing.Tracer("security-repository").Start(ctx, "LogSecurityEvent")
 	defer span.End()
+
 	params := db.CreateSecurityEventParams{
 		ID:        event.ID,
-		UserID:    event.UserID,
+		UserID:    toPgUUIDPtr(&event.UserID),
+		CompanyID: toPgUUIDPtr(&event.CompanyID),
 		EventType: event.EventType,
-		IpAddress: event.IPAddress,
-		UserAgent: toPgText(event.UserAgent),
-		Timestamp: pgtype.Timestamp{Time: event.Timestamp, Valid: true},
+		Severity:  event.Severity,
+		IpAddress: toPgTextPtr(&event.IPAddress),
+		UserAgent: toPgTextPtr(&event.UserAgent),
+		Metadata:  toPgJSONB(event.Metadata),
+		CreatedAt: toPgTimestamptzPtr(&event.Timestamp),
 	}
 
 	_, err := r.store.CreateSecurityEvent(ctx, params)
@@ -47,60 +50,65 @@ func (r *SecurityRepository) LogSecurityEvent(ctx context.Context, event domain.
 func (r *SecurityRepository) GetRecentLoginsByUserID(ctx context.Context, userID uuid.UUID, limit int) ([]domain.SecurityEvent, error) {
 	ctx, span := tracing.Tracer("security-repository").Start(ctx, "GetRecentLoginsByUserID")
 	defer span.End()
-	params := db.GetRecentLoginEventsByUserIDParams{
-		UserID: userID,
-		Limit:  int32(limit),
+
+	params := db.GetSecurityEventsByUserParams{
+		UserID:   toPgUUID(userID),
+		LimitVal: int32(limit),
 	}
 
-	events, err := r.store.GetRecentLoginEventsByUserID(ctx, params)
+	events, err := r.store.GetSecurityEventsByUser(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recent logins: %w", err)
 	}
 
 	result := make([]domain.SecurityEvent, len(events))
 	for i, event := range events {
-		result[i] = domain.SecurityEvent{
-			ID:        event.ID,
-			UserID:    event.UserID,
-			EventType: event.EventType,
-			IPAddress: event.IpAddress,
-			UserAgent: event.UserAgent.String,
-			Timestamp: event.Timestamp.Time,
-			// Parse metadata from JSON
-			Metadata: make(map[string]interface{}),
-		}
+		result[i] = mapDBSecurityEventToDomain(event)
 	}
 
 	return result, nil
 }
 
 // GetSecurityEventsByUserID gets security events by type and time range
-func (r *SecurityRepository) GetSecurityEventsByUserID(ctx context.Context, userID uuid.UUID, eventType string, startTime, endTime time.Time) ([]domain.SecurityEvent, error) {
-	params := db.GetSecurityEventsByUserIDAndTypeParams{
-		UserID:      userID,
-		EventType:   eventType,
-		Timestamp:   pgtype.Timestamp{Time: startTime, Valid: true},
-		Timestamp_2: pgtype.Timestamp{Time: endTime, Valid: true},
+func (r *SecurityRepository) GetSecurityEventsByUserID(ctx context.Context, userID uuid.UUID, companyID uuid.UUID, eventType string, startTime, endTime time.Time) ([]domain.SecurityEvent, error) {
+	ctx, span := tracing.Tracer("security-repository").Start(ctx, "GetSecurityEventsByUserID")
+	defer span.End()
+
+	params := db.GetSecurityEventsByTypeParams{
+		EventType:  eventType,
+		UserID:     userID,
+		CompanyID:  companyID, // NULL for company_id
+		LimitVal:   100,                       // Default limit
+		OffsetVal:  0,                         // Default offset
 	}
 
-	events, err := r.store.GetSecurityEventsByUserIDAndType(ctx, params)
+	events, err := r.store.GetSecurityEventsByType(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get security events: %w", err)
 	}
 
-	result := make([]domain.SecurityEvent, len(events))
-	for i, event := range events {
-		result[i] = domain.SecurityEvent{
-			ID:        event.ID,
-			UserID:    event.UserID,
-			EventType: event.EventType,
-			IPAddress: event.IpAddress,
-			UserAgent: event.UserAgent.String,
-			Timestamp: event.Timestamp.Time,
-			// Parse metadata from JSON
-			Metadata: make(map[string]interface{}),
+	// Filter by time range (since SQL query doesn't support time filtering)
+	var filteredEvents []domain.SecurityEvent
+	for _, event := range events {
+		eventTime := getTimestamptzTime(event.CreatedAt)
+		if eventTime.After(startTime) && eventTime.Before(endTime) {
+			filteredEvents = append(filteredEvents, mapDBSecurityEventToDomain(event))
 		}
 	}
 
-	return result, nil
+	return filteredEvents, nil
+}
+
+// Helper function to map database security event to domain security event
+func mapDBSecurityEventToDomain(dbEvent db.SecurityEvents) domain.SecurityEvent {
+	return domain.SecurityEvent{
+		ID:        dbEvent.ID,
+		UserID:    getUUIDFromPgUUID(dbEvent.UserID),
+		CompanyID: getUUIDFromPgUUID(dbEvent.CompanyID),
+		EventType: dbEvent.EventType,
+		Severity:  dbEvent.Severity,
+		IPAddress: getTextString(dbEvent.IpAddress),
+		UserAgent: getTextString(dbEvent.UserAgent),
+		Timestamp: getTimestamptzTime(dbEvent.CreatedAt),
+	}
 }
