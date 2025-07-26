@@ -8,6 +8,7 @@ import (
 
 	"github.com/demola234/defifundr/pkg/tracing"
 
+	commons "github.com/demola234/defifundr/infrastructure/hash"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
 	utils "github.com/demola234/defifundr/pkg/hash"
@@ -30,6 +31,7 @@ func (u *userService) UpdateKYC(ctx context.Context, kyc domain.KYC) error {
 func NewUserService(userRepo ports.UserRepository) ports.UserService {
 	return &userService{
 		userRepo: userRepo,
+
 	}
 }
 
@@ -105,6 +107,22 @@ func (u *userService) UpdateUser(ctx context.Context, user domain.User) (*domain
 	return updatedUser, nil
 }
 
+
+// UpdateUser implements ports.UserService.
+func (u *userService) UpdatePersonalUser(ctx context.Context, personalUser domain.PersonalUser) (*domain.PersonalUser, error) {
+	ctx, span := tracing.Tracer("user-service").Start(ctx, "UpdateUser")
+	defer span.End()
+
+	// Update the user
+	updatedPersonaUserDetails, err := u.userRepo.UpdatePersonalUser(ctx, personalUser)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+
+	return updatedPersonaUserDetails, nil
+}
+
 // UpdatePassword implements ports.UserService.
 func (u *userService) UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	ctx, span := tracing.Tracer("user-service").Start(ctx, "UpdatePassword")
@@ -167,10 +185,14 @@ func (u *userService) ResetUserPassword(ctx context.Context, userID uuid.UUID, n
 	}
 
 	// Hash the new password
-	hashedPassword, err := utils.HashPassword(newPassword)
+	hashedPassword, err := commons.HashPassword(newPassword)
 	if err != nil {
 		return fmt.Errorf("failed to hash new password: %w", err)
 	}
+
+	fmt.Println(" ");
+	fmt.Println(newPassword);
+	fmt.Println(" ");
 
 	// Update the password
 	err = u.userRepo.UpdatePassword(ctx, userID, hashedPassword)

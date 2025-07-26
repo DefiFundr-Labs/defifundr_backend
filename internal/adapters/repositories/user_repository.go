@@ -4,11 +4,12 @@ package repositories
 
 import (
 	"context"
+	"fmt"
 
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/internal/core/domain"
-	"github.com/google/uuid"
 	"github.com/demola234/defifundr/pkg/tracing"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -27,6 +28,7 @@ func (r *UserRepository) CreateUser(ctx context.Context, user domain.User) (*dom
 	ctx, span := tracing.Tracer("user-repository").Start(ctx, "CreateUser")
 	defer span.End()
 
+	
 	params := db.CreateUserParams{
 		ID:                    user.ID,
 		FirstName:             toPgTextPtr(&user.FirstName),
@@ -293,6 +295,11 @@ func (r *UserRepository) UpdateCompanyUser(ctx context.Context, companyUser doma
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
 	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdatePassword")
 	defer span.End()
+
+
+	fmt.Println(" ");
+	fmt.Println(passwordHash);
+	fmt.Println(" ");
 
 	params := db.UpdateUserPasswordParams{
 		ID:           userID,

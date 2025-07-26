@@ -935,7 +935,7 @@ type GetCompanyEmployeeWithDetailsRow struct {
 	LastName         pgtype.Text        `json:"last_name"`
 	Email            pgtype.Text        `json:"email"`
 	PhoneNumber      pgtype.Text        `json:"phone_number"`
-	CompanyName      string             `json:"company_name"`
+	CompanyName      pgtype.Text        `json:"company_name"`
 	ManagerFirstName pgtype.Text        `json:"manager_first_name"`
 	ManagerLastName  pgtype.Text        `json:"manager_last_name"`
 }
@@ -1084,7 +1084,7 @@ type GetCompanyUserWithDetailsRow struct {
 	LastName                 pgtype.Text        `json:"last_name"`
 	Email                    string             `json:"email"`
 	PhoneNumber              pgtype.Text        `json:"phone_number"`
-	CompanyName              string             `json:"company_name"`
+	CompanyName              pgtype.Text        `json:"company_name"`
 }
 
 func (q *Queries) GetCompanyUserWithDetails(ctx context.Context, id uuid.UUID) (GetCompanyUserWithDetailsRow, error) {
@@ -1642,7 +1642,7 @@ type GetUserCompaniesRow struct {
 	HireDate                 pgtype.Date        `json:"hire_date"`
 	CreatedAt                pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt                pgtype.Timestamptz `json:"updated_at"`
-	CompanyName              string             `json:"company_name"`
+	CompanyName              pgtype.Text        `json:"company_name"`
 	CompanyLogo              pgtype.Text        `json:"company_logo"`
 	CompanyIndustry          pgtype.Text        `json:"company_industry"`
 }

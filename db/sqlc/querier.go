@@ -70,6 +70,9 @@ type Querier interface {
 	DeleteCompanySetting(ctx context.Context, arg DeleteCompanySettingParams) error
 	DeleteCompanyUser(ctx context.Context, id uuid.UUID) error
 	DeleteExpiredOTPs(ctx context.Context) error
+	DeleteOTPByID(ctx context.Context, id uuid.UUID) error
+	DeleteOTPByUserID(ctx context.Context, userID pgtype.UUID) error
+	DeleteOTPByUserIDAndPurpose(ctx context.Context, arg DeleteOTPByUserIDAndPurposeParams) error
 	DeletePersonalUser(ctx context.Context, id uuid.UUID) error
 	DeleteSession(ctx context.Context, id uuid.UUID) error
 	DeleteSystemSetting(ctx context.Context, settingKey string) error
@@ -81,6 +84,7 @@ type Querier interface {
 	// Retrieves all waitlist entries for export
 	ExportWaitlistEntries(ctx context.Context) ([]Waitlist, error)
 	GetActiveEmployees(ctx context.Context, arg GetActiveEmployeesParams) ([]GetActiveEmployeesRow, error)
+	GetActiveOTPsForUser(ctx context.Context, userID pgtype.UUID) ([]Otp, error)
 	GetAllFeatureFlags(ctx context.Context) ([]FeatureFlags, error)
 	GetAllLatestExchangeRates(ctx context.Context) ([]ExchangeRates, error)
 	GetAllSystemSettings(ctx context.Context) ([]SystemSettings, error)

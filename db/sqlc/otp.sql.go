@@ -112,6 +112,85 @@ func (q *Queries) DeleteExpiredOTPs(ctx context.Context) error {
 	return err
 }
 
+const deleteOTPByID = `-- name: DeleteOTPByID :exec
+DELETE FROM otp
+WHERE id = $1
+`
+
+func (q *Queries) DeleteOTPByID(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOTPByID, id)
+	return err
+}
+
+const deleteOTPByUserID = `-- name: DeleteOTPByUserID :exec
+DELETE FROM otp
+WHERE user_id = $1
+`
+
+func (q *Queries) DeleteOTPByUserID(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOTPByUserID, userID)
+	return err
+}
+
+const deleteOTPByUserIDAndPurpose = `-- name: DeleteOTPByUserIDAndPurpose :exec
+DELETE FROM otp
+WHERE user_id = $1 AND purpose = $2
+`
+
+type DeleteOTPByUserIDAndPurposeParams struct {
+	UserID  pgtype.UUID `json:"user_id"`
+	Purpose OtpPurpose  `json:"purpose"`
+}
+
+func (q *Queries) DeleteOTPByUserIDAndPurpose(ctx context.Context, arg DeleteOTPByUserIDAndPurposeParams) error {
+	_, err := q.db.Exec(ctx, deleteOTPByUserIDAndPurpose, arg.UserID, arg.Purpose)
+	return err
+}
+
+const getActiveOTPsForUser = `-- name: GetActiveOTPsForUser :many
+SELECT id, user_id, otp_code, hashed_otp, purpose, contact_method, attempts_made, max_attempts, is_verified, created_at, expires_at, verified_at, ip_address, user_agent, device_id FROM otp
+WHERE user_id = $1 
+  AND is_verified = false 
+  AND expires_at > NOW()
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetActiveOTPsForUser(ctx context.Context, userID pgtype.UUID) ([]Otp, error) {
+	rows, err := q.db.Query(ctx, getActiveOTPsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Otp{}
+	for rows.Next() {
+		var i Otp
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.OtpCode,
+			&i.HashedOtp,
+			&i.Purpose,
+			&i.ContactMethod,
+			&i.AttemptsMade,
+			&i.MaxAttempts,
+			&i.IsVerified,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.VerifiedAt,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.DeviceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOTPVerificationByID = `-- name: GetOTPVerificationByID :one
 SELECT id, user_id, otp_code, hashed_otp, purpose, contact_method, attempts_made, max_attempts, is_verified, created_at, expires_at, verified_at, ip_address, user_agent, device_id FROM otp
 WHERE id = $1

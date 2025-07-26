@@ -11,7 +11,7 @@ import (
 type Company struct {
 	ID                        uuid.UUID  `json:"id"`
 	OwnerID                   uuid.UUID  `json:"owner_id"`
-	CompanyName               string     `json:"company_name"`
+	CompanyName               *string     `json:"company_name"`
 	CompanyEmail              *string    `json:"company_email,omitempty"`
 	CompanyPhone              *string    `json:"company_phone,omitempty"`
 	CompanySize               *string    `json:"company_size,omitempty"`
@@ -72,7 +72,7 @@ type CompanyRepository interface {
 
 
 // NewCompany creates a new Company instance
-func NewCompany(ownerID uuid.UUID, companyName string) *Company {
+func NewCompany(ownerID uuid.UUID, companyName *string) *Company {
 	return &Company{
 		ID:            uuid.New(),
 		OwnerID:       ownerID,

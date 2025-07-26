@@ -318,63 +318,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/profile/address": {
-            "put": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update address details for a registered user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "profile"
-                ],
-                "summary": "Update address details",
-                "parameters": [
-                    {
-                        "description": "Address details",
-                        "name": "addressDetails",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.RegisterAddressDetailsRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Address details updated successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/auth/profile/business": {
             "put": {
                 "security": [
@@ -464,6 +407,63 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile/personal-details": {
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update personal details for a registered user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Update personal details",
+                "parameters": [
+                    {
+                        "description": "Personal details",
+                        "name": "personalDetails",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.RegisterPersonalDetailsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Personal details updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
@@ -1092,6 +1092,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/employee/profile/complete": {
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update address details for a registered user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Update address details",
+                "parameters": [
+                    {
+                        "description": "Address details",
+                        "name": "addressDetails",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/request.RegisterAddressDetailsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Address details updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/profile": {
             "get": {
                 "security": [
@@ -1115,55 +1172,6 @@ const docTemplate = `{
                         "description": "User profile",
                         "schema": {
                             "$ref": "#/definitions/response.UserResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update authenticated user's profile information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Update user profile",
-                "parameters": [
-                    {
-                        "description": "Profile data to update",
-                        "name": "profile",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/request.UpdateProfileRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated user profile",
-                        "schema": {
-                            "$ref": "#/definitions/response.UserResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
@@ -1278,9 +1286,6 @@ const docTemplate = `{
         },
         "request.LoginRequest": {
             "type": "object",
-            "required": [
-                "web_auth_token"
-            ],
             "properties": {
                 "email": {
                     "type": "string"
@@ -1288,15 +1293,6 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "minLength": 8
-                },
-                "provider": {
-                    "type": "string"
-                },
-                "provider_id": {
-                    "type": "string"
-                },
-                "web_auth_token": {
-                    "type": "string"
                 }
             }
         },
@@ -1324,6 +1320,7 @@ const docTemplate = `{
             "required": [
                 "city",
                 "country",
+                "nationality",
                 "postal_code",
                 "user_address"
             ],
@@ -1332,6 +1329,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "country": {
+                    "type": "string"
+                },
+                "date_of_birth": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "nationality": {
+                    "type": "string"
+                },
+                "phone_number": {
                     "type": "string"
                 },
                 "postal_code": {
@@ -1374,12 +1383,38 @@ const docTemplate = `{
                 }
             }
         },
+        "request.RegisterPersonalDetailsRequest": {
+            "type": "object",
+            "required": [
+                "nationality"
+            ],
+            "properties": {
+                "date_of_birth": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "nationality": {
+                    "type": "string"
+                },
+                "personal_account_type": {
+                    "type": "string"
+                },
+                "phone_number": {
+                    "type": "string"
+                }
+            }
+        },
         "request.RegisterUserRequest": {
             "type": "object",
             "required": [
                 "web_auth_token"
             ],
             "properties": {
+                "account_type": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -1396,9 +1431,6 @@ const docTemplate = `{
                 "provider": {
                     "type": "string"
                 },
-                "provider_id": {
-                    "type": "string"
-                },
                 "web_auth_token": {
                     "type": "string"
                 }
@@ -1411,40 +1443,6 @@ const docTemplate = `{
             ],
             "properties": {
                 "session_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "request.UpdateProfileRequest": {
-            "type": "object",
-            "required": [
-                "first_name",
-                "last_name",
-                "nationality"
-            ],
-            "properties": {
-                "company_website": {
-                    "type": "string"
-                },
-                "employment_type": {
-                    "type": "string"
-                },
-                "first_name": {
-                    "type": "string"
-                },
-                "gender": {
-                    "type": "string"
-                },
-                "job_role": {
-                    "type": "string"
-                },
-                "last_name": {
-                    "type": "string"
-                },
-                "nationality": {
-                    "type": "string"
-                },
-                "residential_country": {
                     "type": "string"
                 }
             }

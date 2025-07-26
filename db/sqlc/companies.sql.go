@@ -83,7 +83,7 @@ INSERT INTO companies (
 type CreateCompanyParams struct {
 	ID                        interface{}        `json:"id"`
 	OwnerID                   uuid.UUID          `json:"owner_id"`
-	CompanyName               string             `json:"company_name"`
+	CompanyName               pgtype.Text        `json:"company_name"`
 	CompanyEmail              pgtype.Text        `json:"company_email"`
 	CompanyPhone              pgtype.Text        `json:"company_phone"`
 	CompanySize               pgtype.Text        `json:"company_size"`
@@ -542,7 +542,7 @@ WHERE c.id = $1 AND u.deleted_at IS NULL
 type GetCompanyWithOwnerDetailsRow struct {
 	ID                        uuid.UUID          `json:"id"`
 	OwnerID                   uuid.UUID          `json:"owner_id"`
-	CompanyName               string             `json:"company_name"`
+	CompanyName               pgtype.Text        `json:"company_name"`
 	CompanyEmail              pgtype.Text        `json:"company_email"`
 	CompanyPhone              pgtype.Text        `json:"company_phone"`
 	CompanySize               pgtype.Text        `json:"company_size"`
@@ -638,7 +638,7 @@ type ListCompaniesParams struct {
 type ListCompaniesRow struct {
 	ID                        uuid.UUID          `json:"id"`
 	OwnerID                   uuid.UUID          `json:"owner_id"`
-	CompanyName               string             `json:"company_name"`
+	CompanyName               pgtype.Text        `json:"company_name"`
 	CompanyEmail              pgtype.Text        `json:"company_email"`
 	CompanyPhone              pgtype.Text        `json:"company_phone"`
 	CompanySize               pgtype.Text        `json:"company_size"`
@@ -827,7 +827,7 @@ RETURNING id, owner_id, company_name, company_email, company_phone, company_size
 `
 
 type UpdateCompanyParams struct {
-	CompanyName               string             `json:"company_name"`
+	CompanyName               pgtype.Text        `json:"company_name"`
 	CompanyEmail              pgtype.Text        `json:"company_email"`
 	CompanyPhone              pgtype.Text        `json:"company_phone"`
 	CompanySize               pgtype.Text        `json:"company_size"`

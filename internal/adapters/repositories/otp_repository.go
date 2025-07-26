@@ -69,8 +69,55 @@ func (r *OTPRepository) GetOTPByUserIDAndPurpose(ctx context.Context, userID uui
 		UserID:    otpData.UserID.Bytes,
 		OTPCode:   otpData.OtpCode,
 		HashedOTP: otpData.HashedOtp,
+		ExpiresAt: otpData.ExpiresAt,
+		CreatedAt: otpData.CreatedAt,
+		AttemptsMade: int(otpData.AttemptsMade),
 		Purpose:   domain.OTPPurpose(otpData.Purpose),
 	}, nil
+}
+
+
+// DeleteOTPByUserID deletes all OTPs for a specific user
+func (r *OTPRepository) DeleteOTPByUserID(ctx context.Context, userID uuid.UUID) error {
+	ctx, span := tracing.Tracer("otp-repository").Start(ctx, "DeleteOTPByUserID")
+	defer span.End()
+
+	err := r.store.DeleteOTPByUserID(ctx, pgtype.UUID{Bytes: userID, Valid: true})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteOTPByUserIDAndPurpose deletes OTPs for a specific user and purpose
+func (r *OTPRepository) DeleteOTPByUserIDAndPurpose(ctx context.Context, userID uuid.UUID, purpose domain.OTPPurpose) error {
+	ctx, span := tracing.Tracer("otp-repository").Start(ctx, "DeleteOTPByUserIDAndPurpose")
+	defer span.End()
+
+	err := r.store.DeleteOTPByUserIDAndPurpose(ctx, db.DeleteOTPByUserIDAndPurposeParams{
+		UserID:  pgtype.UUID{Bytes: userID, Valid: true},
+		Purpose: db.OtpPurpose(purpose),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteExpiredOTPs removes all expired OTPs from the database
+func (r *OTPRepository) DeleteExpiredOTPs(ctx context.Context) error {
+	ctx, span := tracing.Tracer("otp-repository").Start(ctx, "DeleteExpiredOTPs")
+	defer span.End()
+
+	err := r.store.DeleteExpiredOTPs(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // VerifyOTP verifies an OTP

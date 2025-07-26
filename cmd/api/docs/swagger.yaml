@@ -39,14 +39,6 @@ definitions:
       password:
         minLength: 8
         type: string
-      provider:
-        type: string
-      provider_id:
-        type: string
-      web_auth_token:
-        type: string
-    required:
-    - web_auth_token
     type: object
   request.LogoutRequest:
     properties:
@@ -66,6 +58,14 @@ definitions:
         type: string
       country:
         type: string
+      date_of_birth:
+        type: string
+      gender:
+        type: string
+      nationality:
+        type: string
+      phone_number:
+        type: string
       postal_code:
         type: string
       user_address:
@@ -73,6 +73,7 @@ definitions:
     required:
     - city
     - country
+    - nationality
     - postal_code
     - user_address
     type: object
@@ -98,8 +99,25 @@ definitions:
     - company_description
     - company_name
     type: object
+  request.RegisterPersonalDetailsRequest:
+    properties:
+      date_of_birth:
+        type: string
+      gender:
+        type: string
+      nationality:
+        type: string
+      personal_account_type:
+        type: string
+      phone_number:
+        type: string
+    required:
+    - nationality
+    type: object
   request.RegisterUserRequest:
     properties:
+      account_type:
+        type: string
       email:
         type: string
       first_name:
@@ -110,8 +128,6 @@ definitions:
         minLength: 8
         type: string
       provider:
-        type: string
-      provider_id:
         type: string
       web_auth_token:
         type: string
@@ -124,29 +140,6 @@ definitions:
         type: string
     required:
     - session_id
-    type: object
-  request.UpdateProfileRequest:
-    properties:
-      company_website:
-        type: string
-      employment_type:
-        type: string
-      first_name:
-        type: string
-      gender:
-        type: string
-      job_role:
-        type: string
-      last_name:
-        type: string
-      nationality:
-        type: string
-      residential_country:
-        type: string
-    required:
-    - first_name
-    - last_name
-    - nationality
     type: object
   request.VerifyMFARequest:
     properties:
@@ -486,42 +479,6 @@ paths:
       summary: Logout
       tags:
       - authentication
-  /auth/profile/address:
-    put:
-      consumes:
-      - application/json
-      description: Update address details for a registered user
-      parameters:
-      - description: Address details
-        in: body
-        name: addressDetails
-        required: true
-        schema:
-          $ref: '#/definitions/request.RegisterAddressDetailsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Address details updated successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - Bearer: []
-      summary: Update address details
-      tags:
-      - profile
   /auth/profile/business:
     put:
       consumes:
@@ -584,6 +541,42 @@ paths:
       security:
       - Bearer: []
       summary: Get profile completion status
+      tags:
+      - profile
+  /auth/profile/personal-details:
+    put:
+      consumes:
+      - application/json
+      description: Update personal details for a registered user
+      parameters:
+      - description: Personal details
+        in: body
+        name: personalDetails
+        required: true
+        schema:
+          $ref: '#/definitions/request.RegisterPersonalDetailsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Personal details updated successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Update personal details
       tags:
       - profile
   /auth/refresh:
@@ -977,6 +970,42 @@ paths:
       summary: Change user password
       tags:
       - users
+  /users/employee/profile/complete:
+    put:
+      consumes:
+      - application/json
+      description: Update address details for a registered user
+      parameters:
+      - description: Address details
+        in: body
+        name: addressDetails
+        required: true
+        schema:
+          $ref: '#/definitions/request.RegisterAddressDetailsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Address details updated successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Update address details
+      tags:
+      - profile
   /users/profile:
     get:
       consumes:
@@ -996,37 +1025,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Get user profile
-      tags:
-      - users
-    put:
-      consumes:
-      - application/json
-      description: Update authenticated user's profile information
-      parameters:
-      - description: Profile data to update
-        in: body
-        name: profile
-        required: true
-        schema:
-          $ref: '#/definitions/request.UpdateProfileRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated user profile
-          schema:
-            $ref: '#/definitions/response.UserResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update user profile
       tags:
       - users
   /waitlist:

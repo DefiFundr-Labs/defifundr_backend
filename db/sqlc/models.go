@@ -125,7 +125,7 @@ type BankAccounts struct {
 type Companies struct {
 	ID                        uuid.UUID          `json:"id"`
 	OwnerID                   uuid.UUID          `json:"owner_id"`
-	CompanyName               string             `json:"company_name"`
+	CompanyName               pgtype.Text        `json:"company_name"`
 	CompanyEmail              pgtype.Text        `json:"company_email"`
 	CompanyPhone              pgtype.Text        `json:"company_phone"`
 	CompanySize               pgtype.Text        `json:"company_size"`

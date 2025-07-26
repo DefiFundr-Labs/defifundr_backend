@@ -29,7 +29,7 @@ func (r *CompanyRepository) CreateCompany(ctx context.Context, company domain.Co
 	params := db.CreateCompanyParams{
 		ID:                       company.ID,
 		OwnerID:                  company.OwnerID,
-		CompanyName:              company.CompanyName,
+		CompanyName:              toPgTextPtr(company.CompanyName),
 		CompanyEmail:             toPgTextPtr(company.CompanyEmail),
 		CompanyPhone:             toPgTextPtr(company.CompanyPhone),
 		CompanySize:              toPgTextPtr(company.CompanySize),
@@ -97,7 +97,7 @@ func (r *CompanyRepository) UpdateCompany(ctx context.Context, company domain.Co
 
 	params := db.UpdateCompanyParams{
 		ID:                       company.ID,
-		CompanyName:              company.CompanyName,
+		CompanyName:              toPgTextPtr(company.CompanyName),
 		CompanyEmail:             toPgTextPtr(company.CompanyEmail),
 		CompanyPhone:             toPgTextPtr(company.CompanyPhone),
 		CompanySize:              toPgTextPtr(company.CompanySize),
@@ -178,7 +178,7 @@ func mapDBCompanyToDomainCompany(dbCompany db.Companies) *domain.Company {
 	return &domain.Company{
 		ID:                       dbCompany.ID,
 		OwnerID:                  dbCompany.OwnerID,
-		CompanyName:              dbCompany.CompanyName,
+		CompanyName:              getTextStringPtr(dbCompany.CompanyName),
 		CompanyEmail:             getTextStringPtr(dbCompany.CompanyEmail),
 		CompanyPhone:             getTextStringPtr(dbCompany.CompanyPhone),
 		CompanySize:              getTextStringPtr(dbCompany.CompanySize),

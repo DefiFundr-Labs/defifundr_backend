@@ -68,3 +68,22 @@ WHERE user_id = $1
   AND is_verified = false 
   AND expires_at > NOW()
 ORDER BY created_at DESC;
+
+-- name: DeleteOTPByUserID :exec
+DELETE FROM otp
+WHERE user_id = $1;
+
+-- name: DeleteOTPByUserIDAndPurpose :exec
+DELETE FROM otp
+WHERE user_id = $1 AND purpose = $2;
+
+-- name: DeleteOTPByID :exec
+DELETE FROM otp
+WHERE id = $1;
+
+-- name: GetActiveOTPsForUser :many
+SELECT * FROM otp
+WHERE user_id = $1 
+  AND is_verified = false 
+  AND expires_at > NOW()
+ORDER BY created_at DESC;

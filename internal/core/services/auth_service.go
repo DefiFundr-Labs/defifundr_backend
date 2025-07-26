@@ -12,6 +12,7 @@ import (
 
 	"github.com/demola234/defifundr/config"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
+	"github.com/demola234/defifundr/infrastructure/common/utils"
 	commons "github.com/demola234/defifundr/infrastructure/hash"
 	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/demola234/defifundr/internal/core/ports"
@@ -125,85 +126,24 @@ func NewAuthService(
 }
 
 // Login implements ports.AuthService.
-func (a *authService) Login(ctx context.Context, email string,  provider string, providerId string, webAuthToken string, password string) (*domain.User, error) {
+func (a *authService) Login(ctx context.Context, email string, password string) (*domain.User, error) {
 	ctx, span := tracing.Tracer("auth-service").Start(ctx, "Login")
 	defer span.End()
 	a.logger.Info("Starting user registration process", map[string]interface{}{
 		"email":    email,
-		"provider": provider,
 	})
 
-	
-
-	if provider == "email" {
-		// Email-based authentication requires a password
-		if password == "" {
-			a.logger.Error("Password required for email authentication", nil, map[string]interface{}{
-				"email": email,
-			})
-			pwErr := errors.New("password is required for email authentication")
-			span.RecordError(pwErr)
-			return nil, pwErr
-		}
-
-		// Check if the user exists
-		existingUser, err := a.userRepo.GetUserByEmail(ctx, email)
-		if err != nil {
-			a.logger.Error("Failed to get user by email", err, map[string]interface{}{
-				"email": email,
-			})
-			span.RecordError(err)
-			return nil, fmt.Errorf("failed to get user by email: %w", err)
-		}
-		if existingUser == nil {
-			a.logger.Error("User not found", nil, map[string]interface{}{
-				"email": email,
-			})
-			notFoundErr := errors.New("user not found")
-			span.RecordError(notFoundErr)
-			return nil, notFoundErr
-		}
-
-		// Verify the password
-		checkedPassword, err := commons.CheckPassword(password, existingUser.PasswordHash)
-		if err != nil {
-			a.logger.Error("Validation Failed", err, map[string]interface{}{
-				"email": email,
-			})
-			return nil, fmt.Errorf("failed to check password: %w", err)
-		}
-
-		if !checkedPassword {
-			a.logger.Error("Invalid password", nil, map[string]interface{}{
-				"email": email,
-			})
-			invPwErr := errors.New("invalid password")
-			span.RecordError(invPwErr)
-			return nil, invPwErr
-		}
-	} else if provider != "" && webAuthToken != "" {
-		// For OAuth or Web3Auth, validate the token and fill user data
-		claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
-		if err != nil {
-			a.logger.Error("Failed to validate WebAuth token", err, map[string]interface{}{
-				"provider": provider,
-			})
-			return nil, fmt.Errorf("invalid authentication token: %w", err)
-		}
-
-		// Extract user information from OAuth claims
-		if claims.Email != "" {
-			email = claims.Email
-		}
-	} else {
-		a.logger.Error("Missing authentication credentials", nil, map[string]interface{}{
-			"provider": provider,
+	// Email-based authentication requires a password
+	if password == "" {
+		a.logger.Error("Password required for email authentication", nil, map[string]interface{}{
+			"email": email,
 		})
-		credErr := errors.New("missing authentication credentials")
-		span.RecordError(credErr)
-		return nil, credErr
+		pwErr := errors.New("password is required for email authentication")
+		span.RecordError(pwErr)
+		return nil, pwErr
 	}
-	// Step 2: Check if user with same email already exists
+
+	// Check if the user exists
 	existingUser, err := a.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		a.logger.Error("Failed to get user by email", err, map[string]interface{}{
@@ -213,12 +153,30 @@ func (a *authService) Login(ctx context.Context, email string,  provider string,
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 	if existingUser == nil {
-		a.logger.Warn("Login attempt for non-existing email", map[string]interface{}{
+		a.logger.Error("User not found", nil, map[string]interface{}{
 			"email": email,
 		})
-		notRegisteredErr := errors.New("email not registered")
-		span.RecordError(notRegisteredErr)
-		return nil, notRegisteredErr
+		notFoundErr := errors.New("Invalid login credentials")
+		span.RecordError(notFoundErr)
+		return nil, notFoundErr
+	}
+
+	// Verify the password
+	checkedPassword, err := commons.CheckPassword(password, existingUser.PasswordHash)
+	if err != nil {
+		a.logger.Error("Validation Failed", err, map[string]interface{}{
+			"email": email,
+		})
+		return nil, fmt.Errorf("failed to check password: %w", err)
+	}
+
+	if !checkedPassword {
+		a.logger.Error("Invalid password", nil, map[string]interface{}{
+			"email": email,
+		})
+		invPwErr := errors.New("Invalid  login credentials")
+		span.RecordError(invPwErr)
+		return nil, invPwErr
 	}
 
 	// Return the user
@@ -226,32 +184,46 @@ func (a *authService) Login(ctx context.Context, email string,  provider string,
 }
 
 // RegisterUser implements the user registration process with Web3Auth integration
-func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastName, authProvider, webAuthToken, passwordStr string) (*domain.User, error) {
+func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastName, authProvider, webAuthToken, passwordStr string, accountType string) (*domain.User, error) {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterUser")
+	defer span.End()
+	
+	a.logger.Info("Starting user registration process", map[string]interface{}{
+		"email":        email,
+		"provider":     authProvider,
+		"account_type": accountType,
+	})
+
+	// Validate account type
+	if accountType != "employee" && accountType != "employer" {
+		err := errors.New("account_type must be either 'employee' or 'employer'")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	// Check if user already exists
+	existingUser, err := a.userRepo.GetUserByEmail(ctx, email)
+	if err == nil && existingUser != nil {
+		a.logger.Warn("Registration attempt for existing email", map[string]interface{}{
+			"email": email,
+		})
+		err := errors.New("email already registered")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	// Create user object
 	user := domain.User{
 		ID:           uuid.New(),
 		Email:        email,
 		FirstName:    firstName,
 		LastName:     lastName,
 		AuthProvider: authProvider,
-		AccountType:  "personal",
+		AccountType:  accountType,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
-	ctx, span := tracing.Tracer("auth-service").Start(ctx, "RegisterUser")
-	defer span.End()
-	a.logger.Info("Starting user registration process", map[string]interface{}{
-		"email":    user.Email,
-		"provider": user.AuthProvider,
-	})
 
-	existingUser, err := a.userRepo.GetUserByEmail(ctx, user.Email)
-	if err == nil && existingUser != nil {
-		a.logger.Warn("Registration attempt for existing email", map[string]interface{}{
-			"email": user.Email,
-		})
-		span.RecordError(err)
-		return nil, errors.New("email already registered")
-	}
 
 	// Step 1: Handle authentication based on provider
 	if user.AuthProvider == "email" {
@@ -271,10 +243,21 @@ func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastNa
 			a.logger.Error("Failed to hash password", err, map[string]interface{}{
 				"email": user.Email,
 			})
+			span.RecordError(err)
 			return nil, fmt.Errorf("failed to hash password: %w", err)
 		}
+
 		user.PasswordHash = hashedPassword
-	} else if user.AuthProvider != "" && webAuthToken != "" {
+	} else {
+		a.logger.Error("Missing authentication credentials", nil, map[string]interface{}{
+			"provider": user.AuthProvider,
+		})
+		err := errors.New("missing authentication credentials")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	if user.AuthProvider != "" && webAuthToken != "" {
 		// For OAuth or Web3Auth, validate the token and fill user data
 		claims, err := a.oauthRepo.ValidateWebAuthToken(ctx, webAuthToken)
 		if err != nil {
@@ -286,7 +269,6 @@ func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastNa
 		}
 
 		// Extract user information from OAuth claims
-		// Now claims is a *Web3AuthClaims struct, not a map
 		if claims.Email != "" {
 			user.Email = claims.Email
 		}
@@ -300,11 +282,10 @@ func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastNa
 		}
 
 		if claims.ProfileImage != "" {
-			profileImage := claims.ProfileImage
-			user.ProfilePictureURL = &profileImage
+			user.ProfilePictureURL = &claims.ProfileImage
 		}
 
-		// Set provider ID (usually the email for Google OAuth)
+		// Set provider ID
 		if claims.VerifierID != "" {
 			user.ProviderID = &claims.VerifierID
 		}
@@ -318,35 +299,109 @@ func (a *authService) RegisterUser(ctx context.Context, email, firstName, lastNa
 			} else if strings.Contains(claims.Verifier, "twitter") {
 				user.AuthProvider = "twitter"
 			}
-			// Add more provider mappings as needed
 		}
+	} 
 
-		// For OAuth users, no password is needed
-		user.PasswordHash = ""
-	} else {
-		// If not email auth and no token provided, it's an error
-		a.logger.Error("Missing authentication credentials", nil, map[string]interface{}{
-			"provider": user.AuthProvider,
-		})
-		return nil, errors.New("missing authentication credentials")
-	}
-
-
-	// Step 3: Set default values if not provided
-	if user.ID == uuid.Nil {
-		user.ID = uuid.New()
-	}
-
-	// Step 4: Register the user in the database
+	// Step 2: Create the main user record
 	createdUser, err := a.userRepo.CreateUser(ctx, user)
 	if err != nil {
 		a.logger.Error("Failed to register user", err, map[string]interface{}{
 			"email": user.Email,
 		})
+		span.RecordError(err)
 		return nil, fmt.Errorf("failed to register user: %w", err)
 	}
 
+	// Step 3: Create personal user record (for both employee and employer)
+	personalUser := domain.PersonalUser{
+		ID:        uuid.New(),
+		UserID:    createdUser.ID,
+		KYCStatus: "pending",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	_, err = a.userRepo.CreatePersonalUser(ctx, personalUser)
+	if err != nil {
+		a.logger.Error("Failed to create personal user profile", err, map[string]interface{}{
+			"user_id": createdUser.ID,
+		})
+		// Don't fail the registration for this, but log the error
+	} else {
+		a.logger.Info("Personal user profile created", map[string]interface{}{
+			"user_id": createdUser.ID,
+		})
+	}
+
+	// Step 4: If employer, create company record
+	if accountType == "employer" {
+		err = a.createEmployerCompany(ctx, createdUser)
+		if err != nil {
+			a.logger.Error("Failed to create employer company", err, map[string]interface{}{
+				"user_id": createdUser.ID,
+			})
+			// Don't fail the registration, but log the error
+			// You might want to handle this differently based on your business logic
+		}
+	}
+
+	// Step 5: Log security event
+	a.LogSecurityEvent(ctx, "user_registered", createdUser.ID, map[string]interface{}{
+		"provider":     createdUser.AuthProvider,
+		"email":        createdUser.Email,
+		"account_type": createdUser.AccountType,
+	})
+
+	a.logger.Info("User registration completed successfully", map[string]interface{}{
+		"user_id":      createdUser.ID,
+		"email":        createdUser.Email,
+		"account_type": createdUser.AccountType,
+	})
+
 	return createdUser, nil
+}
+
+// Helper function to create company for employer
+func (a *authService) createEmployerCompany(ctx context.Context, user *domain.User) error {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "createEmployerCompany")
+	defer span.End()
+
+	// Create a default company for the employer
+	company := domain.Company{
+		ID:            uuid.New(),
+		OwnerID:       user.ID,
+		AccountStatus: "pending",
+		KYBStatus:     "pending",
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	// Set company email to user's email if available
+	if user.Email != "" {
+		company.CompanyEmail = &user.Email
+	}
+
+	// Set primary contact info
+	if user.FirstName != "" || user.LastName != "" {
+		contactName := strings.TrimSpace(fmt.Sprintf("%s %s", user.FirstName, user.LastName))
+		company.PrimaryContactName = &contactName
+	}
+
+	if user.Email != "" {
+		company.PrimaryContactEmail = &user.Email
+	}
+
+	_, err := a.companyRepo.CreateCompany(ctx, company)
+	if err != nil {
+		return fmt.Errorf("failed to create company: %w", err)
+	}
+
+	a.logger.Info("Company created for employer", map[string]interface{}{
+		"company_id": company.ID,
+		"owner_id":   user.ID,
+	})
+
+	return nil
 }
 
 // RegisterBusiness implements ports.AuthService.
@@ -418,10 +473,6 @@ func (a *authService) RegisterBusiness(ctx context.Context, companyInfo domain.C
 	// Company exists, update it
 	updatedCompany := *existingCompany
 	
-	// Update company fields if provided
-	if companyInfo.CompanyName != "" {
-		updatedCompany.CompanyName = companyInfo.CompanyName
-	}
 	if companyInfo.CompanyDescription != nil {
 		updatedCompany.CompanyDescription = companyInfo.CompanyDescription
 	}
@@ -617,10 +668,6 @@ func (a *authService) RegisterBusinessDetails(ctx context.Context, companyInfo d
 	// Update only the business details fields, keeping other fields as they are
 	updatedCompany := *existingCompany
 
-	// Update company name (assuming it's always required)
-	if companyInfo.CompanyName != "" {
-		updatedCompany.CompanyName = companyInfo.CompanyName
-	}
 
 	// Update optional fields - check if they're pointers or regular strings
 	// If CompanyDescription is a pointer
@@ -1677,11 +1724,18 @@ func isValidWalletAddress(address string) bool {
 }
 // InitiatePasswordReset starts the password reset process for email-based accounts
 func (a *authService) InitiatePasswordReset(ctx context.Context, email string) error {
+	ctx, span := tracing.Tracer("auth-service").Start(ctx, "InitiatePasswordReset")
+	defer span.End()
+
+	a.logger.Info("Password reset requested", map[string]interface{}{
+		"email": email,
+	})
+
 	// Check if email exists and is email-based account
 	user, err := a.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		// Return generic message for security - don't reveal if email exists
-		a.logger.Info("Password reset requested", map[string]interface{}{
+		a.logger.Info("Password reset requested for non-existent email", map[string]interface{}{
 			"email": email,
 		})
 		return nil
@@ -1690,46 +1744,69 @@ func (a *authService) InitiatePasswordReset(ctx context.Context, email string) e
 	// Check if account was created with email/password
 	if user.AuthProvider != "email" {
 		a.logger.Info("Password reset attempted for OAuth account", map[string]interface{}{
-			"email": email,
+			"email":    email,
 			"provider": user.AuthProvider,
 		})
 		// Return nil instead of error for security - don't reveal details
 		return nil
 	}
 
+	// Delete any existing password reset OTPs for this user
+	err = a.otpRepo.DeleteOTPByUserID(ctx, user.ID)
+	if err != nil {
+		a.logger.Error("Failed to delete existing OTPs", err, map[string]interface{}{
+			"user_id": user.ID,
+			"email":   email,
+		})
+		// Continue anyway - this shouldn't block the process
+	} else {
+		a.logger.Info("Existing password reset OTPs deleted", map[string]interface{}{
+			"user_id": user.ID,
+		})
+	}
+
 	// Generate OTP
 	otpCode := random.RandomOtp()
 	otp := domain.OTPVerification{
-		ID:           uuid.New(),
-		UserID:       user.ID,
-		Purpose:      domain.OTPPurposePasswordReset,
-		OTPCode:      otpCode,
-		ExpiresAt:    time.Now().Add(15 * time.Minute),
-
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		Purpose:   domain.OTPPurposePasswordReset,
+		OTPCode:   otpCode,
+		ExpiresAt: utils.GetCurrentTime().Add(15 * time.Minute),
+		CreatedAt: utils.GetCurrentTime(),
 	}
 
 	// Store OTP
-	_, err = a.otpRepo.CreateOTP(ctx, otp)
+	createdOTP, err := a.otpRepo.CreateOTP(ctx, otp)
 	if err != nil {
 		a.logger.Error("Failed to create OTP", err, map[string]interface{}{
-			"email": email,
+			"user_id": user.ID,
+			"email":   email,
 		})
+		span.RecordError(err)
 		return nil // Don't reveal internal errors
 	}
+
+	a.logger.Info("OTP created for password reset", map[string]interface{}{
+		"user_id": user.ID,
+		"otp_id":  createdOTP.ID,
+	})
 
 	// Send password reset email
 	err = a.emailService.SendPasswordResetEmail(ctx, email, user.FirstName, otp.OTPCode)
 	if err != nil {
 		a.logger.Error("Failed to send password reset email", err, map[string]interface{}{
-			"email": email,
+			"user_id": user.ID,
+			"email":   email,
 		})
+		span.RecordError(err)
 		// Email failure shouldn't be exposed to the user
 		return nil
 	}
 
-	// Log security event
-	a.LogSecurityEvent(ctx, "password_reset_initiated", user.ID, map[string]interface{}{
-		"email": email,
+	a.logger.Info("Password reset initiated successfully", map[string]interface{}{
+		"user_id": user.ID,
+		"email":   email,
 	})
 
 	return nil
@@ -1749,13 +1826,8 @@ func (a *authService) VerifyResetOTP(ctx context.Context, email string, code str
 	}
 
 	// Check if OTP is expired
-	if time.Now().After(otp.ExpiresAt) {
+	if utils.GetCurrentTime().After(otp.ExpiresAt) {
 		return errors.New("OTP has expired")
-	}
-
-	// Check attempts
-	if otp.AttemptsMade >= otp.MaxAttempts {
-		return errors.New("maximum attempts exceeded")
 	}
 
 	// Verify code - just check if it's correct without invalidating
@@ -1787,13 +1859,8 @@ func (a *authService) ResetPassword(ctx context.Context, email string, code stri
 	}
 
 	// Check if OTP is expired
-	if time.Now().After(otp.ExpiresAt) {
+	if utils.GetCurrentTime().After(otp.ExpiresAt) {
 		return errors.New("OTP has expired")
-	}
-
-	// Check attempts
-	if otp.AttemptsMade >= otp.MaxAttempts {
-		return errors.New("maximum attempts exceeded")
 	}
 
 	// Verify code
@@ -1803,17 +1870,28 @@ func (a *authService) ResetPassword(ctx context.Context, email string, code stri
 		return errors.New("invalid OTP")
 	}
 
+	fmt.Println(" ");
+	fmt.Println(newPassword);
+	fmt.Println(" ");
+
+
 	// Now proceed with password reset
 	err = a.userService.ResetUserPassword(ctx, user.ID, newPassword)
 	if err != nil {
 		return fmt.Errorf("failed to reset password: %w", err)
 	}
 
-	// Invalidate the OTP after successful password reset
-	err = a.otpRepo.VerifyOTP(ctx, otp.ID, code)
+	// Delete any existing password reset OTPs for this user
+	err = a.otpRepo.DeleteOTPByUserID(ctx, user.ID)
 	if err != nil {
-		a.logger.Error("Failed to invalidate OTP after password reset", err, map[string]interface{}{
-			"otp_id": otp.ID,
+		a.logger.Error("Failed to delete existing OTPs", err, map[string]interface{}{
+			"user_id": user.ID,
+			"email":   email,
+		})
+		// Continue anyway - this shouldn't block the process
+	} else {
+		a.logger.Info("Existing password reset OTPs deleted", map[string]interface{}{
+			"user_id": user.ID,
 		})
 	}
 

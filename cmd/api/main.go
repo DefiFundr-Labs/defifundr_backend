@@ -137,7 +137,7 @@ func main() {
 
 	// Create handlers
 	authHandler := handlers.NewAuthHandler(authService, userService, logger)
-	userHandler := handlers.NewUserHandler(userService)
+	userHandler := handlers.NewUserHandler(userService, logger)
 	waitlistHandler := handlers.NewWaitlistHandler(waitlistService, logger)
 
 	// Initialize OpenTelemetry

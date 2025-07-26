@@ -13,6 +13,8 @@ func RegisterUserRoutes(rg *gin.RouterGroup, handler *handlers.UserHandler, auth
 		users.GET("/profile", handler.GetProfile)
 		// users.PUT("/profile", handler.UpdateProfile)
 		users.POST("/change-password", handler.ChangePassword)
+        users.PUT("/employee/profile/complete", handler.UpdateAddressDetails)
+		
 
 	}
 }

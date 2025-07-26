@@ -14,8 +14,8 @@ type AuthService interface {
 	AuthenticateWithWeb3(ctx context.Context, webAuthToken string, userAgent string, clientIP string) (*domain.User, *domain.Session, error)
 
 	// User authentication
-	Login(ctx context.Context, email string, provider string, providerId string, webAuthToken string, password string) (*domain.User, error)
-	RegisterUser(ctx context.Context, email string, firstName string, lastName string, authProvider string, webAuthToken string, password string) (*domain.User, error)
+	Login(ctx context.Context, email string, password string) (*domain.User, error)
+	RegisterUser(ctx context.Context, email string, firstName string, lastName string, authProvider string, webAuthToken string, password string, accountType string) (*domain.User, error)
 
 	// User profile completion
 	RegisterPersonalDetails(ctx context.Context, userId uuid.UUID, nationality string, dateOfBirth time.Time, gender string, personalAccountType string, phoneNumber string) (*domain.User, error)
@@ -60,6 +60,7 @@ type UserService interface {
 	UpdatePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error
 	UpdateKYC(ctx context.Context, kyc domain.KYC) error
 	ResetUserPassword(ctx context.Context, userID uuid.UUID, newPassword string) error
+	UpdatePersonalUser(ctx context.Context, personalUser domain.PersonalUser) (*domain.PersonalUser, error)
 	GetPersonalUserByUserID(ctx context.Context, userID uuid.UUID) (*domain.PersonalUser, error)
 }
 

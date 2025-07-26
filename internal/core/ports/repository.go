@@ -78,6 +78,10 @@ type OTPRepository interface {
 	GetOTPByUserIDAndPurpose(ctx context.Context, userID uuid.UUID, purpose domain.OTPPurpose) (*domain.OTPVerification, error)
 	VerifyOTP(ctx context.Context, id uuid.UUID, code string) error
 	IncrementAttempts(ctx context.Context, id uuid.UUID) error
+
+	DeleteOTPByUserID(ctx context.Context, userID uuid.UUID) error
+	DeleteOTPByUserIDAndPurpose(ctx context.Context, userID uuid.UUID, purpose domain.OTPPurpose) error
+	DeleteExpiredOTPs(ctx context.Context) error
 }
 
 // KYCRepository defines the data access operations for KYC entities

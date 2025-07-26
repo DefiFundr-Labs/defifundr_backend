@@ -42,11 +42,6 @@ func (r *RegisterBusinessDetailsRequest) Validate() error {
 
 // Validate validates the login request
 func (r *LoginRequest) Validate() error {
-	if r.Provider != "email" && r.Provider != "google" && r.Provider != "apple" {
-		return errors.New("invalid provider")
-	}
-
-	if r.Provider == "email" {
 		if r.Email == "" {
 			return errors.New("email is required for email provider")
 		}
@@ -56,15 +51,6 @@ func (r *LoginRequest) Validate() error {
 		if r.Password == "" {
 			return errors.New("password is required for email provider")
 		}
-	}
-
-	if r.Provider != "email" && r.ProviderID == "" {
-		return errors.New("provider ID is required")
-	}
-
-	if (r.Provider == "apple" || r.Provider == "google") && r.WebAuthToken == "" {
-		return errors.New("web auth token is required")
-	}
 
 	return nil
 }

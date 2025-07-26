@@ -112,8 +112,15 @@ func (w *EmailWorker) processEmail(emailMsg EmailMessage) error {
 // sendEmail sends an email using GoMail
 func (w *EmailWorker) sendEmail(emailMsg EmailMessage) error {
 	// Create a new message
+	fmt.Println(" ");
+	fmt.Println(" testttt ");
+	fmt.Println(w.config.SMTPUsername);
+	fmt.Println(" dddd ");
+
+	fmt.Println(emailMsg);
+
 	m := gomail.NewMessage()
-	m.SetHeader("From", w.config.SenderEmail)
+	m.SetHeader("From", "rydrteam@gmail.com")
 	m.SetHeader("To", emailMsg.Recipient)
 	m.SetHeader("Subject", emailMsg.Subject)
 
@@ -144,14 +151,14 @@ func (w *EmailWorker) sendEmail(emailMsg EmailMessage) error {
 			}
 		} else {
 			// No template found, create a simple text version
-			content := fmt.Sprintf("Hello,\n\nThis is a message from %s.\n\n", w.config.SenderName)
+			content := fmt.Sprintf("Hello,\n\nThis is a message from %s.\n\n", "No Reply")
 			
 			// Add any data values as simple text
 			for k, v := range emailMsg.Data {
 				content += fmt.Sprintf("%s: %v\n", k, v)
 			}
 			
-			content += fmt.Sprintf("\n\nBest regards,\nThe %s Team", w.config.SenderName)
+			content += fmt.Sprintf("\n\nBest regards,\nThe %s Team", "No Reply")
 			m.SetBody("text/plain", content)
 		}
 	}

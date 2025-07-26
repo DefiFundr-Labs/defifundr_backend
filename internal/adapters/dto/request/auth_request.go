@@ -27,6 +27,10 @@ type RegisterAddressDetailsRequest struct {
 	City        string `json:"city" binding:"required"`
 	PostalCode  string `json:"postal_code" binding:"required"`
 	Country     string `json:"country" binding:"required"`
+	Nationality         string 		`json:"nationality" binding:"required"`
+	PhoneNumber         string 		`json:"phone_number"`
+	Gender				string 		`json:"gender"`
+	DateOfBirth			time.Time 	`json:"date_of_birth"`
 }
 
 // RegisterBusinessDetailsRequest represents business details
@@ -87,7 +91,6 @@ type RegisterUserRequest struct {
 	LastName     string `json:"last_name" binding:"omitempty"`
 	AccountType  string `json:"account_type" binding:"omitempty"`
 	Provider     string `json:"provider" binding:"omitempty"`
-	ProviderID   string `json:"provider_id" binding:"omitempty"`
 	WebAuthToken string `json:"web_auth_token" binding:"required"`
 }
 
@@ -107,9 +110,6 @@ type CheckEmailRequest struct {
 type LoginRequest struct {
 	Email        string `json:"email" binding:"omitempty"`
 	Password     string `json:"password,omitempty" binding:"omitempty,min=8"`
-	Provider     string `json:"provider" binding:"omitempty"`
-	ProviderID   string `json:"provider_id" binding:"omitempty"`
-	WebAuthToken string `json:"web_auth_token" binding:"required"`
 }
 
 // UpdateProfileRequest represents the profile update request

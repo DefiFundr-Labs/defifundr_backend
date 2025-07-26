@@ -55,7 +55,7 @@ CREATE TABLE personal_users (
 CREATE TABLE companies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    company_name VARCHAR(255) NOT NULL,
+    company_name VARCHAR(255),
     company_email VARCHAR(255),
     company_phone VARCHAR(50),
     company_size VARCHAR(50),
