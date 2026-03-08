@@ -7,15 +7,15 @@ import (
 	"strings"
 
 	"github.com/demola234/defifundr/infrastructure/common/logging"
-	response "github.com/demola234/defifundr/internal/adapters/dto/response"
-	"github.com/demola234/defifundr/internal/core/ports"
-	token_maker "github.com/demola234/defifundr/pkg/token_maker"
+	response "github.com/demola234/defifundr/internal/features/auth/dto"
+	"github.com/demola234/defifundr/internal/features/user/port"
+	token "github.com/demola234/defifundr/pkg/token"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 // AuthMiddleware validates the JWT token in the Authorization header
-func AuthMiddleware(tokenMaker token_maker.Maker, logger logging.Logger) gin.HandlerFunc {
+func AuthMiddleware(tokenMaker token.Maker, logger logging.Logger) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Get Authorization header
 		authHeader := ctx.GetHeader("Authorization")
@@ -82,7 +82,7 @@ func DeviceTrackingMiddleware() gin.HandlerFunc {
 }
 
 // MFARequiredMiddleware ensures that MFA is completed for critical operations
-func MFARequiredMiddleware(userRepo ports.UserRepository) gin.HandlerFunc {
+func MFARequiredMiddleware(userRepo userport.UserRepository) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// Get user ID from context
 		userID, exists := ctx.Get("user_id")

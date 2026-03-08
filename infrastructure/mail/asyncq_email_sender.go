@@ -7,7 +7,6 @@ import (
 
 	"github.com/demola234/defifundr/config"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
-	"github.com/demola234/defifundr/internal/core/ports"
 	emailEnums "github.com/demola234/defifundr/pkg/utils"
 
 	"github.com/google/uuid"
@@ -21,7 +20,7 @@ type AsyncQEmailSender struct {
 }
 
 // NewAsyncQEmailSender creates a new AsyncQ-based email sender
-func NewAsyncQEmailSender(config config.Config, logger logging.Logger) (ports.EmailSender, error) {
+func NewAsyncQEmailSender(config config.Config, logger logging.Logger) (*AsyncQEmailSender, error) {
 	// Create a processor for the queue
 	processor := func(item interface{}) error {
 		//TODO

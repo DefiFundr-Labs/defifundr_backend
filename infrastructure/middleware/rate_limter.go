@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	response "github.com/demola234/defifundr/internal/adapters/dto/response"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
@@ -30,9 +29,9 @@ func RateLimitMiddleware(limit int, duration time.Duration) gin.HandlerFunc {
 
 		// Check if this request is allowed
 		if !limiter.Allow() {
-			ctx.JSON(http.StatusTooManyRequests, response.ErrorResponse{
-				Success: false,
-				Message: "Rate limit exceeded. Please try again later.",
+			ctx.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": "Rate limit exceeded. Please try again later.",
 			})
 			ctx.Abort()
 			return

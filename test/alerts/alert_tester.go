@@ -1,11 +1,10 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "net/http"
-    "sync"
-    "time"
+	"log"
+	"net/http"
+	"sync"
+	"time"
 )
 
 func main() {

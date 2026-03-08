@@ -7,18 +7,54 @@ import (
 
 	"github.com/demola234/defifundr/cmd/api/docs"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/DefiFundr-Labs/defifundr_backend/pkg/metrics"
-	"github.com/DefiFundr-Labs/defifundr_backend/infrastructure/middleware"
 	"github.com/demola234/defifundr/config"
 	db "github.com/demola234/defifundr/db/sqlc"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	"github.com/demola234/defifundr/infrastructure/mail"
 	middlewareLocal "github.com/demola234/defifundr/infrastructure/middleware"
-	"github.com/demola234/defifundr/internal/adapters/handlers"
-	"github.com/demola234/defifundr/internal/adapters/repositories"
-	"github.com/demola234/defifundr/internal/adapters/routers"
-	"github.com/demola234/defifundr/internal/core/services"
-	tokenMaker "github.com/demola234/defifundr/pkg/token_maker"
+	authhandler "github.com/demola234/defifundr/internal/features/auth/handler"
+	authrepo "github.com/demola234/defifundr/internal/features/auth/repository"
+	authrouter "github.com/demola234/defifundr/internal/features/auth/router"
+	authusecase "github.com/demola234/defifundr/internal/features/auth/usecase"
+	userhandler "github.com/demola234/defifundr/internal/features/user/handler"
+	userrepo "github.com/demola234/defifundr/internal/features/user/repository"
+	userrouter "github.com/demola234/defifundr/internal/features/user/router"
+	userusecase "github.com/demola234/defifundr/internal/features/user/usecase"
+	waitlisthandler "github.com/demola234/defifundr/internal/features/waitlist/handler"
+	waitlistrepo "github.com/demola234/defifundr/internal/features/waitlist/repository"
+	waitlistrouter "github.com/demola234/defifundr/internal/features/waitlist/router"
+	waitlistusecase "github.com/demola234/defifundr/internal/features/waitlist/usecase"
+	adminhandler "github.com/demola234/defifundr/internal/features/admin/handler"
+	adminrouter "github.com/demola234/defifundr/internal/features/admin/router"
+	blockchainhandler "github.com/demola234/defifundr/internal/features/blockchain/handler"
+	blockchainrouter "github.com/demola234/defifundr/internal/features/blockchain/router"
+	companyhandler "github.com/demola234/defifundr/internal/features/company/handler"
+	companyrouter "github.com/demola234/defifundr/internal/features/company/router"
+	compliancehandler "github.com/demola234/defifundr/internal/features/compliance/handler"
+	compliancerouter "github.com/demola234/defifundr/internal/features/compliance/router"
+	contracthandler "github.com/demola234/defifundr/internal/features/contract/handler"
+	contractrouter "github.com/demola234/defifundr/internal/features/contract/router"
+	hrhandler "github.com/demola234/defifundr/internal/features/hr/handler"
+	hrrouter "github.com/demola234/defifundr/internal/features/hr/router"
+	invoicehandler "github.com/demola234/defifundr/internal/features/invoice/handler"
+	invoicerouter "github.com/demola234/defifundr/internal/features/invoice/router"
+	kychandler "github.com/demola234/defifundr/internal/features/kyc/handler"
+	kycrouter "github.com/demola234/defifundr/internal/features/kyc/router"
+	networkhandler "github.com/demola234/defifundr/internal/features/network/handler"
+	networkrouter "github.com/demola234/defifundr/internal/features/network/router"
+	notificationhandler "github.com/demola234/defifundr/internal/features/notification/handler"
+	notificationrouter "github.com/demola234/defifundr/internal/features/notification/router"
+	payrollhandler "github.com/demola234/defifundr/internal/features/payroll/handler"
+	payrollrouter "github.com/demola234/defifundr/internal/features/payroll/router"
+	taxhandler "github.com/demola234/defifundr/internal/features/tax/handler"
+	taxrouter "github.com/demola234/defifundr/internal/features/tax/router"
+	timesheethandler "github.com/demola234/defifundr/internal/features/timesheet/handler"
+	timesheetrouter "github.com/demola234/defifundr/internal/features/timesheet/router"
+	transactionhandler "github.com/demola234/defifundr/internal/features/transaction/handler"
+	transactionrouter "github.com/demola234/defifundr/internal/features/transaction/router"
+	wallethandler "github.com/demola234/defifundr/internal/features/wallet/handler"
+	walletrouter "github.com/demola234/defifundr/internal/features/wallet/router"
+	token "github.com/demola234/defifundr/pkg/token"
 	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -53,7 +89,7 @@ var (
 	version   = "1.0.0"
 	commit    = "dev"
 	buildTime = "unknown"
-	
+
 	apiRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "api_requests_total",
@@ -69,7 +105,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot load config: %v", err)
 	}
-	
+
 	// Initialize logger
 	logger := logging.New(&configs)
 	logger.Info("Starting application", map[string]interface{}{
@@ -79,9 +115,6 @@ func main() {
 		"build_time":  buildTime,
 	})
 
-	// Initialize metrics with application info
-	metrics.SetApplicationInfo(version, commit, buildTime)
-
 	// Register Prometheus metrics
 	prometheus.MustRegister(apiRequests)
 
@@ -89,79 +122,76 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Connect to the database using the pgx driver with database/sql
 	conn, err := pgxpool.New(ctx, configs.DBSource)
 	if err != nil {
 		logger.Fatal("Unable to connect to database", err, map[string]interface{}{
 			"db_source": configs.DBSource,
 		})
 	}
-
-	// Initialize repository
-	dbQueries := db.New(conn)
-
 	defer conn.Close()
 
-	// Create repositories
-	userRepo := repositories.NewUserRepository(*dbQueries)
-	oAuthRepo := repositories.NewOAuthRepository(*dbQueries, logger)
-	sessionRepo := repositories.NewSessionRepository(*dbQueries)
-	waitlistRepo := repositories.NewWaitlistRepository(*dbQueries)
-	walletRepo := repositories.NewWalletRepository(*dbQueries)
-	securityRepo := repositories.NewSecurityRepository(*dbQueries)
-	otpRepo := repositories.NewOtpRepository(*dbQueries)
+	dbQueries := db.New(conn)
 
-	tokenMaker, err := tokenMaker.NewTokenMaker(configs.TokenSymmetricKey)
+	// ── Repositories ──────────────────────────────────────────────
+	uRepo := userrepo.New(*dbQueries)
+	oAuthRepo := authrepo.NewOAuthRepository(*dbQueries, logger)
+	sessionRepo := authrepo.NewSessionRepository(*dbQueries)
+	walletRepo := authrepo.NewWalletRepository(*dbQueries)
+	securityRepo := authrepo.NewSecurityRepository(*dbQueries)
+	otpRepo := authrepo.NewOTPRepository(*dbQueries)
+	waitlistRepo := waitlistrepo.New(*dbQueries)
+
+	maker, err := token.NewTokenMaker(configs.TokenSymmetricKey)
 	if err != nil {
 		log.Fatalf("cannot create token maker: %v", err)
 	}
 
-	// Initialize Email System
-	// Create AsyncQ email sender
-	emailSender, err := mail.NewAsyncQEmailSender(configs, logger)
+	// ── Email system ──────────────────────────────────────────────
+	asyncQSender, err := mail.NewAsyncQEmailSender(configs, logger)
 	if err != nil {
 		logger.Fatal("Failed to create AsyncQ email sender", err, nil)
 	}
-
-	// Need to cast to access the non-interface methods
-	asyncQSender, ok := emailSender.(*mail.AsyncQEmailSender)
-	if !ok {
-		logger.Fatal("Failed to cast email sender", nil, nil)
-	}
-
-	// Create the email worker with the async queue
 	emailWorker, err := mail.NewEmailWorker(configs, logger, asyncQSender)
 	if err != nil {
 		logger.Fatal("Failed to create email worker", err, nil)
 	}
-
-	// Start the email worker
 	emailWorker.Start()
 	defer emailWorker.Stop()
 
-	// Create email service using the email sender
-	emailService := services.NewEmailService(configs, logger, emailSender)
+	emailService := mail.NewEmailService(configs, logger, asyncQSender)
 
-	userService := services.NewUserService(userRepo)
+	// ── Services ──────────────────────────────────────────────────
+	userService := userusecase.New(uRepo)
+	authService := authusecase.New(uRepo, sessionRepo, oAuthRepo, walletRepo, securityRepo, emailService, maker, configs, logger, otpRepo, userService)
+	waitlistService := waitlistusecase.New(waitlistRepo, emailService)
 
-	// Create services
-	authService := services.NewAuthService(userRepo, sessionRepo, oAuthRepo, walletRepo, securityRepo, emailService, tokenMaker, configs, logger, otpRepo, userService)
-	waitlistService := services.NewWaitlistService(waitlistRepo, emailService)
+	// ── Handlers ──────────────────────────────────────────────────
+	aHandler := authhandler.New(authService, logger)
+	uHandler := userhandler.New(userService)
+	wHandler := waitlisthandler.New(waitlistService, logger)
+	companyHandler := companyhandler.New()
+	walletHandler := wallethandler.New()
+	transactionHandler := transactionhandler.New()
+	payrollHandler := payrollhandler.New()
+	invoiceHandler := invoicehandler.New()
+	contractHandler := contracthandler.New()
+	kycHandler := kychandler.New()
+	timesheetHandler := timesheethandler.New()
+	hrHandler := hrhandler.New()
+	notificationHandler := notificationhandler.New()
+	complianceHandler := compliancehandler.New()
+	taxHandler := taxhandler.New()
+	networkHandler := networkhandler.New()
+	blockchainHandler := blockchainhandler.New()
+	adminHandler := adminhandler.New()
 
-	// Create handlers
-	authHandler := handlers.NewAuthHandler(authService, logger)
-	userHandler := handlers.NewUserHandler(userService)
-	waitlistHandler := handlers.NewWaitlistHandler(waitlistService, logger)
-
-	// Initialize OpenTelemetry
+	// ── OpenTelemetry ─────────────────────────────────────────────
 	tracingCfg := tracing.Config{
 		ServiceName:       "defifundr-api",
 		ServiceVersion:    version,
 		Environment:       configs.Environment,
 		UseStdoutExporter: configs.Environment != "production",
 	}
-
-	// Set up OpenTelemetry
 	otelShutdown, err := tracing.SetupOTel(context.Background(), tracingCfg)
 	if err != nil {
 		logger.Fatal("Failed to set up OpenTelemetry", err, map[string]interface{}{
@@ -174,20 +204,11 @@ func main() {
 		}
 	}()
 
-	// Initialize the router
+	// ── Router ────────────────────────────────────────────────────
 	router := gin.New()
-
-	// Apply middleware in order
 	router.Use(middlewareLocal.LoggingMiddleware(logger, &configs))
 	router.Use(gin.Recovery())
 	router.Use(otelgin.Middleware("defifundr-api"))
-	
-	// Add metrics middleware
-	router.Use(middleware.PrometheusMiddleware())
-	router.Use(middleware.AuthMetricsMiddleware())
-	router.Use(middleware.TransactionMetricsMiddleware())
-
-	// Configure CORS to allow all origins
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -197,7 +218,6 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Health check endpoint with optional delay for testing
 	router.GET("/health", func(c *gin.Context) {
 		delay := c.Query("delay")
 		if delay != "" {
@@ -212,22 +232,22 @@ func main() {
 			"version":   version,
 		})
 	})
-
-	// Prometheus /metrics endpoint
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Set up API routes
-	setupRoutes(router, authHandler, userHandler, waitlistHandler, configs, logger)
+	setupRoutes(router, aHandler, uHandler, wHandler,
+		companyHandler, walletHandler, transactionHandler, payrollHandler,
+		invoiceHandler, contractHandler, kycHandler, timesheetHandler,
+		hrHandler, notificationHandler, complianceHandler, taxHandler,
+		networkHandler, blockchainHandler, adminHandler,
+		maker, configs, logger)
 
-	// Explicitly set host based on environment without protocol
+	// ── Swagger ───────────────────────────────────────────────────
 	var swaggerHost string
 	if configs.Environment == "production" {
 		swaggerHost = "defifundr.koyeb.app"
 	} else {
 		swaggerHost = "localhost:8080"
 	}
-
-	// Set Swagger info
 	docs.SwaggerInfo.Title = "DefiFundr API"
 	docs.SwaggerInfo.Description = "Decentralized Payroll and Invoicing Platform for Remote Teams"
 	docs.SwaggerInfo.Version = version
@@ -238,11 +258,8 @@ func main() {
 	} else {
 		docs.SwaggerInfo.Schemes = []string{"http"}
 	}
-
-	// Setup Swagger endpoint
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// Start the HTTP server
 	logger.Info("HTTP server is running on", map[string]interface{}{
 		"address": configs.HTTPServerAddress,
 	})
@@ -251,20 +268,51 @@ func main() {
 	}
 }
 
-// setupRoutes configures all the API routes
-func setupRoutes(router *gin.Engine, authHandler *handlers.AuthHandler, userHandler *handlers.UserHandler, waitlistHandler *handlers.WaitlistHandler, configs config.Config, logger logging.Logger) {
+// setupRoutes configures all the API routes.
+func setupRoutes(
+	router *gin.Engine,
+	aHandler *authhandler.Handler,
+	uHandler *userhandler.Handler,
+	wHandler *waitlisthandler.Handler,
+	companyHandler *companyhandler.Handler,
+	walletHandler *wallethandler.Handler,
+	transactionHandler *transactionhandler.Handler,
+	payrollHandler *payrollhandler.Handler,
+	invoiceHandler *invoicehandler.Handler,
+	contractHandler *contracthandler.Handler,
+	kycHandler *kychandler.Handler,
+	timesheetHandler *timesheethandler.Handler,
+	hrHandler *hrhandler.Handler,
+	notificationHandler *notificationhandler.Handler,
+	complianceHandler *compliancehandler.Handler,
+	taxHandler *taxhandler.Handler,
+	networkHandler *networkhandler.Handler,
+	blockchainHandler *blockchainhandler.Handler,
+	adminHandler *adminhandler.Handler,
+	maker token.Maker,
+	configs config.Config,
+	logger logging.Logger,
+) {
+	
 	v1 := router.Group("/api/v1")
+	authMiddleware := middlewareLocal.AuthMiddleware(maker, logger)
 
-	tokenMaker, err := tokenMaker.NewTokenMaker(configs.TokenSymmetricKey)
-	if err != nil {
-		logger.Panic("failed to create token maker", err)
-	}
-
-	// Middleware to check if the user is authenticated
-	authMiddleware := middlewareLocal.AuthMiddleware(tokenMaker, logger)
-
-	// Register routes
-	routers.RegisterAuthRoutes(router, authHandler, tokenMaker, logger)
-	routers.RegisterUserRoutes(v1, userHandler, authMiddleware)
-	routers.RegisterWaitlistRoutes(v1, waitlistHandler, authMiddleware)
+	authrouter.RegisterRoutes(router, aHandler, maker, logger)
+	userrouter.RegisterRoutes(v1, uHandler, authMiddleware)
+	waitlistrouter.RegisterRoutes(v1, wHandler, authMiddleware)
+	companyrouter.RegisterRoutes(v1, companyHandler, authMiddleware)
+	walletrouter.RegisterRoutes(v1, walletHandler, authMiddleware)
+	transactionrouter.RegisterRoutes(v1, transactionHandler, authMiddleware)
+	payrollrouter.RegisterRoutes(v1, payrollHandler, authMiddleware)
+	invoicerouter.RegisterRoutes(v1, invoiceHandler, authMiddleware)
+	contractrouter.RegisterRoutes(v1, contractHandler, authMiddleware)
+	kycrouter.RegisterRoutes(v1, kycHandler, authMiddleware)
+	timesheetrouter.RegisterRoutes(v1, timesheetHandler, authMiddleware)
+	hrrouter.RegisterRoutes(v1, hrHandler, authMiddleware)
+	notificationrouter.RegisterRoutes(v1, notificationHandler, authMiddleware)
+	compliancerouter.RegisterRoutes(v1, complianceHandler, authMiddleware)
+	taxrouter.RegisterRoutes(v1, taxHandler, authMiddleware)
+	networkrouter.RegisterRoutes(v1, networkHandler, authMiddleware)
+	blockchainrouter.RegisterRoutes(v1, blockchainHandler, authMiddleware)
+	adminrouter.RegisterRoutes(v1, adminHandler, authMiddleware)
 }

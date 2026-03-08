@@ -3,7 +3,6 @@ package config
 import (
 	"time"
 
-	"github.com/demola234/defifundr/internal/core/domain"
 	"github.com/spf13/viper"
 )
 
@@ -122,28 +121,3 @@ func LoadConfig(path string) (config Config, err error) {
 	return
 }
 
-// ToDomainConfig converts the config package's Config to domain.Config
-func (c *Config) ToDomainConfig() *domain.Config {
-	return &domain.Config{
-		// JWT Configuration
-		TokenSymmetricKey:    c.TokenSymmetricKey,
-		AccessTokenDuration:  c.AccessTokenDuration,
-		RefreshTokenDuration: c.RefreshTokenDuration,
-
-		// Database Configuration
-		DBDriver: c.DBDriver,
-		DBSource: c.DBSource,
-
-		// Server Configuration
-		HTTPServerAddress: c.HTTPServerAddress,
-		Environment:       c.Environment,
-
-		// Security Configuration
-		RotateRefreshTokens: c.RotateRefreshTokens,
-		MaxLoginAttempts:    c.MaxLoginAttempts,
-
-		// OTP Configuration
-		OTPExpiryDuration: c.OTPExpiryDuration,
-		MaxOTPAttempts:    c.MaxOTPAttempts,
-	}
-}
