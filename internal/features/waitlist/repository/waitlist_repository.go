@@ -184,7 +184,7 @@ func mapToWaitlistEntry(dbEntry db.Waitlist) *waitlistdomain.WaitlistEntry {
 		ReferralSource: dbEntry.ReferralSource.String,
 		Status:         dbEntry.Status,
 		SignupDate:     dbEntry.SignupDate,
-		Metadata:       make(map[string]interface{}),
+		Metadata:       make(map[string]any),
 	}
 
 	if dbEntry.InvitedDate.Valid {

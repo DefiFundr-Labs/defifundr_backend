@@ -43,7 +43,7 @@ func NewEmailWorker(config config.Config, logger logging.Logger, sender *AsyncQE
 	// Load email templates - don't fail if templates directory doesn't exist
 	templates, err := loadTemplates(templatesDir)
 	if err != nil {
-		logger.Warn("Failed to load email templates, will use text-only emails", map[string]interface{}{
+		logger.Warn("Failed to load email templates, will use text-only emails", map[string]any{
 			"error": err.Error(),
 			"path":  templatesDir,
 		})
@@ -60,7 +60,7 @@ func NewEmailWorker(config config.Config, logger logging.Logger, sender *AsyncQE
 	}
 
 	// Set up the processor for the async queue
-	sender.SetProcessor(func(item interface{}) error {
+	sender.SetProcessor(func(item any) error {
 		emailMsg, ok := item.(EmailMessage)
 		if !ok {
 			return fmt.Errorf("invalid message type, expected EmailMessage")
@@ -85,7 +85,7 @@ func (w *EmailWorker) Stop() {
 
 // processEmail processes an email message from the queue
 func (w *EmailWorker) processEmail(emailMsg EmailMessage) error {
-	w.logger.Info("Processing email", map[string]interface{}{
+	w.logger.Info("Processing email", map[string]any{
 		"id":        emailMsg.ID,
 		"recipient": emailMsg.Recipient,
 		"template":  emailMsg.TemplateName,
@@ -94,14 +94,14 @@ func (w *EmailWorker) processEmail(emailMsg EmailMessage) error {
 	// Send the email
 	err := w.sendEmail(emailMsg)
 	if err != nil {
-		w.logger.Error("Failed to send email", err, map[string]interface{}{
+		w.logger.Error("Failed to send email", err, map[string]any{
 			"id":        emailMsg.ID,
 			"recipient": emailMsg.Recipient,
 		})
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	w.logger.Info("Email sent successfully", map[string]interface{}{
+	w.logger.Info("Email sent successfully", map[string]any{
 		"id":        emailMsg.ID,
 		"recipient": emailMsg.Recipient,
 	})
@@ -130,7 +130,7 @@ func (w *EmailWorker) sendEmail(emailMsg EmailMessage) error {
 			var htmlBuffer strings.Builder
 			err := tmpl.Execute(&htmlBuffer, emailMsg.Data)
 			if err != nil {
-				w.logger.Warn("Failed to render template, using plain text", map[string]interface{}{
+				w.logger.Warn("Failed to render template, using plain text", map[string]any{
 					"template": templateName,
 					"error":    err.Error(),
 				})

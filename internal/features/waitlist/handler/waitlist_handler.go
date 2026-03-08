@@ -9,6 +9,7 @@ import (
 	waitlistport "github.com/demola234/defifundr/internal/features/waitlist/port"
 	"github.com/demola234/defifundr/infrastructure/common/logging"
 	appErrors "github.com/demola234/defifundr/pkg/apperrors"
+	"github.com/demola234/defifundr/pkg/metrics"
 	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-gonic/gin"
 )
@@ -59,9 +60,10 @@ func (h *Handler) JoinWaitlist(ctx *gin.Context) {
 
 	position, err := h.service.GetWaitlistPosition(ctx.Request.Context(), entry.ID)
 	if err != nil {
-		reqLogger.Warn("Failed to get waitlist position", map[string]interface{}{"error": err.Error()})
+		reqLogger.Warn("Failed to get waitlist position", map[string]any{"error": err.Error()})
 	}
 
+	metrics.WaitlistSignupsTotal.Inc()
 	ctx.JSON(http.StatusCreated, waitlistdto.SuccessResponse{
 		Success: true,
 		Message: "Successfully joined waitlist",

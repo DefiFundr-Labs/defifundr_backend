@@ -22,7 +22,7 @@ type AsyncQEmailSender struct {
 // NewAsyncQEmailSender creates a new AsyncQ-based email sender
 func NewAsyncQEmailSender(config config.Config, logger logging.Logger) (*AsyncQEmailSender, error) {
 	// Create a processor for the queue
-	processor := func(item interface{}) error {
+	processor := func(item any) error {
 		//TODO
 		return nil
 	}
@@ -40,19 +40,19 @@ func NewAsyncQEmailSender(config config.Config, logger logging.Logger) (*AsyncQE
 }
 
 // SendEmail sends an email directly
-func (s *AsyncQEmailSender) SendEmail(ctx context.Context, recipient string, subject string, templateName string, data map[string]interface{}) error {
+func (s *AsyncQEmailSender) SendEmail(ctx context.Context, recipient string, subject string, templateName string, data map[string]any) error {
 	_, err := s.QueueEmail(ctx, recipient, subject, templateName, data, emailEnums.NormalPriority)
 	return err
 }
 
 // SendEmailWithAttachment sends an email with attachments directly
-func (s *AsyncQEmailSender) SendEmailWithAttachment(ctx context.Context, recipient string, subject string, templateName string, data map[string]interface{}, attachments []emailEnums.EmailAttachment) error {
+func (s *AsyncQEmailSender) SendEmailWithAttachment(ctx context.Context, recipient string, subject string, templateName string, data map[string]any, attachments []emailEnums.EmailAttachment) error {
 	_, err := s.QueueEmail(ctx, recipient, subject, templateName, data, emailEnums.NormalPriority)
 	return err
 }
 
 // QueueEmail queues an email for asynchronous delivery
-func (s *AsyncQEmailSender) QueueEmail(ctx context.Context, recipient string, subject string, templateName string, data map[string]interface{}, priority emailEnums.EmailPriority) (string, error) {
+func (s *AsyncQEmailSender) QueueEmail(ctx context.Context, recipient string, subject string, templateName string, data map[string]any, priority emailEnums.EmailPriority) (string, error) {
 	// Create a unique ID for the email
 	id := uuid.New().String()
 
@@ -74,7 +74,7 @@ func (s *AsyncQEmailSender) QueueEmail(ctx context.Context, recipient string, su
 		return "", fmt.Errorf("failed to enqueue email message: %w", err)
 	}
 
-	s.logger.Info("Email queued", map[string]interface{}{
+	s.logger.Info("Email queued", map[string]any{
 		"id":        id,
 		"recipient": recipient,
 		"template":  templateName,
@@ -85,7 +85,7 @@ func (s *AsyncQEmailSender) QueueEmail(ctx context.Context, recipient string, su
 }
 
 // SetProcessor sets the processor function for the queue
-func (s *AsyncQEmailSender) SetProcessor(processor func(interface{}) error) {
+func (s *AsyncQEmailSender) SetProcessor(processor func(any) error) {
 	s.queue.processor = processor
 }
 

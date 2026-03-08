@@ -109,7 +109,7 @@ type SecurityEvent struct {
 	EventType string                 `json:"event_type"`
 	IPAddress string                 `json:"ip_address"`
 	UserAgent string                 `json:"user_agent"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	Metadata  map[string]any `json:"metadata"`
 	Timestamp time.Time              `json:"timestamp"`
 }
 

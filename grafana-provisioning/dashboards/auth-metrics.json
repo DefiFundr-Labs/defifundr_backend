@@ -1,8 +1,8 @@
 {
   "id": null,
   "uid": "auth-metrics",
-  "title": "Authentication Metrics",
-  "tags": ["auth", "metrics"],
+  "title": "DefiFundr - Auth Metrics",
+  "tags": ["auth"],
   "timezone": "browser",
   "schemaVersion": 36,
   "version": 1,
@@ -10,30 +10,54 @@
   "panels": [
     {
       "type": "stat",
-      "title": "Login Requests (Total)",
-      "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
-      "targets": [
-        {
-          "expr": "sum(api_requests_total{path='/api/v1/auth/login'})",
-          "legendFormat": "Login Requests",
-          "refId": "A"
-        }
-      ],
+      "title": "Total Registrations",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "auth_registrations_total", "legendFormat": "Registrations", "refId": "A"}],
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
     },
     {
-      "type": "graph",
-      "title": "Login Request Rate",
-      "gridPos": {"x": 8, "y": 0, "w": 16, "h": 8},
+      "type": "stat",
+      "title": "Successful Logins",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "auth_login_attempts_total{status=\"success\"}", "legendFormat": "Success", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Failed Logins",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "auth_login_attempts_total{status=\"failure\"} or vector(0)", "legendFormat": "Failures", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 5}]}}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Token Refreshes",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(auth_token_refresh_total) or vector(0)", "legendFormat": "Refreshes", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Login Rate (success vs failure)",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
       "targets": [
-        {
-          "expr": "rate(api_requests_total{path='/api/v1/auth/login'}[1m])",
-          "legendFormat": "Login Req/sec",
-          "refId": "A"
-        }
+        {"expr": "rate(auth_login_attempts_total{status=\"success\"}[5m])", "legendFormat": "Success/s", "refId": "A"},
+        {"expr": "rate(auth_login_attempts_total{status=\"failure\"}[5m]) or vector(0)", "legendFormat": "Failure/s", "refId": "B"}
       ],
-      "fieldConfig": {"defaults": {"unit": "req/s"}, "overrides": []}
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth Endpoint Latency (P95)",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{path=~\"/api/v1/auth/.*\"}[5m])) by (le, path))", "legendFormat": "{{path}}", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
     }
   ]
 }

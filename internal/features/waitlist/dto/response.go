@@ -33,7 +33,7 @@ type StatsResponse struct {
 type SuccessResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 }
 
 // ErrorResponse is a generic error envelope.
@@ -48,5 +48,5 @@ type PageResponse struct {
 	PageSize   int         `json:"page_size"`
 	TotalItems int64       `json:"total_items"`
 	TotalPages int         `json:"total_pages"`
-	Items      interface{} `json:"items"`
+	Items      any `json:"items"`
 }

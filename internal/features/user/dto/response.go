@@ -6,14 +6,14 @@ import "time"
 type SuccessResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 }
 
 // ErrorResponse is a generic error response.
 type ErrorResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 }
 
 // UserResponse represents user data in a response.

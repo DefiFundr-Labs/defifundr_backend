@@ -10,14 +10,14 @@ import (
 type SuccessResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 }
 
 // ErrorResponse is a generic error response.
 type ErrorResponse struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 }
 
 // LoginUserResponse represents a user in a login/register response.
@@ -83,7 +83,7 @@ type SecurityEventResponse struct {
 	IPAddress string                 `json:"ip_address"`
 	UserAgent string                 `json:"user_agent"`
 	Timestamp time.Time              `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // MFASetupResponse represents the MFA setup response.

@@ -63,7 +63,6 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -89,14 +88,6 @@ var (
 	version   = "1.0.0"
 	commit    = "dev"
 	buildTime = "unknown"
-
-	apiRequests = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "api_requests_total",
-			Help: "Total number of API requests received.",
-		},
-		[]string{"path", "method"},
-	)
 )
 
 func main() {
@@ -108,15 +99,12 @@ func main() {
 
 	// Initialize logger
 	logger := logging.New(&configs)
-	logger.Info("Starting application", map[string]interface{}{
+	logger.Info("Starting application", map[string]any{
 		"environment": configs.Environment,
 		"version":     version,
 		"commit":      commit,
 		"build_time":  buildTime,
 	})
-
-	// Register Prometheus metrics
-	prometheus.MustRegister(apiRequests)
 
 	// Connect using pgx
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -124,7 +112,7 @@ func main() {
 
 	conn, err := pgxpool.New(ctx, configs.DBSource)
 	if err != nil {
-		logger.Fatal("Unable to connect to database", err, map[string]interface{}{
+		logger.Fatal("Unable to connect to database", err, map[string]any{
 			"db_source": configs.DBSource,
 		})
 	}
@@ -135,8 +123,8 @@ func main() {
 	// ── Repositories ──────────────────────────────────────────────
 	uRepo := userrepo.New(*dbQueries)
 	oAuthRepo := authrepo.NewOAuthRepository(*dbQueries, logger)
-	sessionRepo := authrepo.NewSessionRepository(*dbQueries)
-	walletRepo := authrepo.NewWalletRepository(*dbQueries)
+	sessionRepo := authrepo.NewSessionRepository(*dbQueries, conn)
+	walletRepo := authrepo.NewWalletRepository(*dbQueries, conn)
 	securityRepo := authrepo.NewSecurityRepository(*dbQueries)
 	otpRepo := authrepo.NewOTPRepository(*dbQueries)
 	waitlistRepo := waitlistrepo.New(*dbQueries)
@@ -194,7 +182,7 @@ func main() {
 	}
 	otelShutdown, err := tracing.SetupOTel(context.Background(), tracingCfg)
 	if err != nil {
-		logger.Fatal("Failed to set up OpenTelemetry", err, map[string]interface{}{
+		logger.Fatal("Failed to set up OpenTelemetry", err, map[string]any{
 			"service": tracingCfg.ServiceName,
 		})
 	}
@@ -209,8 +197,9 @@ func main() {
 	router.Use(middlewareLocal.LoggingMiddleware(logger, &configs))
 	router.Use(gin.Recovery())
 	router.Use(otelgin.Middleware("defifundr-api"))
+	router.Use(middlewareLocal.PrometheusMiddleware())
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     getAllowedOrigins(configs.Environment),
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -260,12 +249,19 @@ func main() {
 	}
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	logger.Info("HTTP server is running on", map[string]interface{}{
+	logger.Info("HTTP server is running on", map[string]any{
 		"address": configs.HTTPServerAddress,
 	})
 	if err := router.Run(configs.HTTPServerAddress); err != nil {
 		logger.Fatal("Failed to start HTTP server", err)
 	}
+}
+
+func getAllowedOrigins(env string) []string {
+	if env == "production" {
+		return []string{"https://defifundr.com", "https://app.defifundr.com"}
+	}
+	return []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:8080"}
 }
 
 // setupRoutes configures all the API routes.
@@ -290,7 +286,7 @@ func setupRoutes(
 	blockchainHandler *blockchainhandler.Handler,
 	adminHandler *adminhandler.Handler,
 	maker token.Maker,
-	configs config.Config,
+	_ config.Config,
 	logger logging.Logger,
 ) {
 	

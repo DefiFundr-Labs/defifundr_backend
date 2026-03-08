@@ -11,7 +11,7 @@ import (
 type Service interface {
 	JoinWaitlist(ctx context.Context, email, fullName, referralSource string) (*waitlistdomain.WaitlistEntry, error)
 	GetWaitlistPosition(ctx context.Context, id uuid.UUID) (int, error)
-	GetWaitlistStats(ctx context.Context) (map[string]interface{}, error)
+	GetWaitlistStats(ctx context.Context) (map[string]any, error)
 	ListWaitlist(ctx context.Context, page, pageSize int, filters map[string]string) ([]waitlistdomain.WaitlistEntry, int64, error)
 	ExportWaitlist(ctx context.Context) ([]byte, error)
 }

@@ -2,7 +2,6 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"strings"
 
@@ -56,6 +55,7 @@ func AuthMiddleware(tokenMaker token.Maker, logger logging.Logger) gin.HandlerFu
 		// Set user ID in context
 		ctx.Set("user_id", payload.UserID)
 		ctx.Set("email", payload.Email)
+		ctx.Set("authorization_payload", payload)
 
 		// Continue to the next handler
 		ctx.Next()
@@ -126,7 +126,7 @@ func MFARequiredMiddleware(userRepo userport.UserRepository) gin.HandlerFunc {
 
 		// Verify MFA token (implement token validation logic here)
 		// For now, just checking if user has MFA enabled
-		user, err := userRepo.GetUserByID(ctx, userUUID)
+		_, err := userRepo.GetUserByID(ctx.Request.Context(), userUUID)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, response.ErrorResponse{
 				Success: false,
@@ -135,8 +135,7 @@ func MFARequiredMiddleware(userRepo userport.UserRepository) gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-
-		log.Printf("User MFA status: %v", user.AccountType)
+		// user retrieved for MFA check
 
 		ctx.Next()
 	}

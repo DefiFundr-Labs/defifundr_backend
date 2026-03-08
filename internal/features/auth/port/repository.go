@@ -31,7 +31,7 @@ type AuthService interface {
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*userdomain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*userdomain.User, error)
 	CheckEmailExists(ctx context.Context, email string) (bool, error)
-	LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]interface{}) error
+	LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]any) error
 	GetUserSecurityEvents(ctx context.Context, userID uuid.UUID) ([]authdomain.SecurityEvent, error)
 	InitiatePasswordReset(ctx context.Context, email string) error
 	VerifyResetOTP(ctx context.Context, email, otp string) error

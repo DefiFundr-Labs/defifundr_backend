@@ -19,7 +19,7 @@ type Config struct {
 
 	// Server Configuration
 	HTTPServerAddress string `mapstructure:"HTTP_SERVER_ADDRESS"`
-	Environment       string `mapstructure:"ENVIROMENT"`
+	Environment       string `mapstructure:"ENVIRONMENT"`
 
 	// Blockchain Configuration
 	CryptDeployURL     string `mapstructure:"CRYPT_DEPLOY_URL"`
@@ -73,7 +73,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("HTTP_SERVER_ADDRESS", ":8080")
 	viper.SetDefault("ACCESS_TOKEN_DURATION", "15m")
 	viper.SetDefault("REFRESH_TOKEN_DURATION", "24h")
-	viper.SetDefault("ENVIROMENT", "development")
+	viper.SetDefault("ENVIRONMENT", "development")
 	viper.SetDefault("ROTATE_REFRESH_TOKENS", true)
 	viper.SetDefault("MAX_LOGIN_ATTEMPTS", 5)
 	viper.SetDefault("OTP_EXPIRY_DURATION", "5m")

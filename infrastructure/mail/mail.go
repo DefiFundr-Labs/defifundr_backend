@@ -12,7 +12,7 @@ type EmailMessage struct {
 	Recipient    string                       `json:"recipient"`
 	Subject      string                       `json:"subject"`
 	TemplateName string                       `json:"template_name"`
-	Data         map[string]interface{}       `json:"data"`
+	Data         map[string]any       `json:"data"`
 	Attachments  []emailEnums.EmailAttachment `json:"attachments,omitempty"`
 	Priority     emailEnums.EmailPriority     `json:"priority"`
 	CreatedAt    time.Time                    `json:"created_at"`

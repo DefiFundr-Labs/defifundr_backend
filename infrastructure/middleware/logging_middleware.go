@@ -55,7 +55,7 @@ func LoggingMiddleware(logger logging.Logger, cfg *config.Config) gin.HandlerFun
 
 		// Log request
 		if cfg.LogRequestBody && len(requestBody) > 0 && method != "GET" {
-			reqLogger.Info("HTTP Request", map[string]interface{}{
+			reqLogger.Info("HTTP Request", map[string]any{
 				"request_body": string(requestBody),
 			})
 		} else {
@@ -71,7 +71,7 @@ func LoggingMiddleware(logger logging.Logger, cfg *config.Config) gin.HandlerFun
 		size := c.Writer.Size()
 
 		// Log response
-		responseFields := map[string]interface{}{
+		responseFields := map[string]any{
 			"status":     status,
 			"latency_ms": latency.Milliseconds(),
 			"size":       size,

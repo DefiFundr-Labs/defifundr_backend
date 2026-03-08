@@ -1,39 +1,50 @@
 {
   "id": null,
   "uid": "business-metrics",
-  "title": "Business Metrics",
-  "tags": ["business", "metrics"],
+  "title": "DefiFundr - Business Metrics",
+  "tags": ["business"],
   "timezone": "browser",
   "schemaVersion": 36,
   "version": 1,
-  "refresh": "10s",
+  "refresh": "30s",
   "panels": [
     {
       "type": "stat",
-      "title": "Waitlist Signups (Total)",
+      "title": "Waitlist Signups",
       "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
-      "targets": [
-        {
-          "expr": "sum(waitlist_signups_total)",
-          "legendFormat": "Signups",
-          "refId": "A"
-        }
-      ],
+      "targets": [{"expr": "waitlist_signups_total or vector(0)", "legendFormat": "Signups", "refId": "A"}],
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
     },
     {
-      "type": "graph",
+      "type": "stat",
+      "title": "Total Users Registered",
+      "gridPos": {"x": 8, "y": 0, "w": 8, "h": 4},
+      "targets": [{"expr": "auth_registrations_total or vector(0)", "legendFormat": "Users", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "App Errors",
+      "gridPos": {"x": 16, "y": 0, "w": 8, "h": 4},
+      "targets": [{"expr": "sum(app_errors_total) or vector(0)", "legendFormat": "Errors", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
       "title": "Waitlist Signup Rate",
-      "gridPos": {"x": 8, "y": 0, "w": 16, "h": 8},
-      "targets": [
-        {
-          "expr": "rate(waitlist_signups_total[1m])",
-          "legendFormat": "Signups/sec",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {"defaults": {"unit": "1/s"}, "overrides": []}
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(waitlist_signups_total[10m]) or vector(0)", "legendFormat": "Signups/s", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate by Type",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(app_errors_total[5m])) by (type) or vector(0)", "legendFormat": "{{type}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
     }
   ]
 }

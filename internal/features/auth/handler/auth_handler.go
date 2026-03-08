@@ -11,6 +11,7 @@ import (
 	userdomain "github.com/demola234/defifundr/internal/features/user/domain"
 	userport "github.com/demola234/defifundr/internal/features/user/port"
 	appErrors "github.com/demola234/defifundr/pkg/apperrors"
+	"github.com/demola234/defifundr/pkg/metrics"
 	token "github.com/demola234/defifundr/pkg/token"
 	"github.com/demola234/defifundr/pkg/tracing"
 	"github.com/gin-gonic/gin"
@@ -59,7 +60,10 @@ func (h *Handler) Web3AuthLogin(ctx *gin.Context) {
 		return
 	}
 
-	profileCompletion, _ := h.service.GetProfileCompletionStatus(spanCtx, user.ID)
+	profileCompletion, profileErr := h.service.GetProfileCompletionStatus(spanCtx, user.ID)
+	if profileErr != nil {
+		reqLogger.Error("Failed to get profile completion status", profileErr, nil)
+	}
 	var completionData *authdto.ProfileCompletionResponse
 	if profileCompletion != nil {
 		completionData = &authdto.ProfileCompletionResponse{
@@ -69,7 +73,11 @@ func (h *Handler) Web3AuthLogin(ctx *gin.Context) {
 		}
 	}
 
-	wallets, _ := h.service.GetUserWallets(spanCtx, user.ID)
+	wallets, walletsErr := h.service.GetUserWallets(spanCtx, user.ID)
+	if walletsErr != nil {
+		reqLogger.Error("Failed to get user wallets", walletsErr, nil)
+		wallets = nil
+	}
 	walletResponses := make([]authdto.UserWalletResponse, len(wallets))
 	for i, w := range wallets {
 		walletResponses[i] = authdto.UserWalletResponse{ID: w.ID.String(), Address: w.Address, Type: w.Type, Chain: w.Chain, IsDefault: w.IsDefault}
@@ -81,7 +89,7 @@ func (h *Handler) Web3AuthLogin(ctx *gin.Context) {
 	}
 	isNewUser := session.CreatedAt.Sub(user.CreatedAt) < time.Minute
 
-	responseData := map[string]interface{}{
+	responseData := map[string]any{
 		"user": authdto.LoginUserResponse{
 			ID: user.ID.String(), Email: user.Email, ProfilePicture: profilePicture,
 			AccountType: user.AccountType, FirstName: user.FirstName, LastName: user.LastName,
@@ -101,7 +109,7 @@ func (h *Handler) Web3AuthLogin(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "Authentication successful", Data: responseData})
-	reqLogger.Info("Web3Auth login successful", map[string]interface{}{"user_id": user.ID, "is_new_user": isNewUser})
+	reqLogger.Info("Web3Auth login successful", map[string]any{"user_id": user.ID, "is_new_user": isNewUser})
 }
 
 // ────────────────────────────── RegisterUser ──────────────────────────────
@@ -142,7 +150,7 @@ func (h *Handler) RegisterUser(ctx *gin.Context) {
 			status = http.StatusConflict
 			message = "Email already registered"
 		}
-		reqLogger.Error("User registration failed", err, map[string]interface{}{"email": req.Email})
+		reqLogger.Error("User registration failed", err, map[string]any{"email": req.Email})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: message})
 		return
 	}
@@ -154,10 +162,11 @@ func (h *Handler) RegisterUser(ctx *gin.Context) {
 		return
 	}
 
+	metrics.AuthRegistrationsTotal.Inc()
 	ctx.JSON(http.StatusCreated, authdto.SuccessResponse{
 		Success: true,
 		Message: "User registered successfully",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"user": authdto.LoginUserResponse{
 				ID: createdUser.ID.String(), Email: createdUser.Email,
 				FirstName: createdUser.FirstName, LastName: createdUser.LastName,
@@ -171,7 +180,7 @@ func (h *Handler) RegisterUser(ctx *gin.Context) {
 			"onboarding_steps": []string{"complete_profile", "verify_email"},
 		},
 	})
-	reqLogger.Info("User registered successfully", map[string]interface{}{"user_id": createdUser.ID, "email": createdUser.Email})
+	reqLogger.Info("User registered successfully", map[string]any{"user_id": createdUser.ID, "email": createdUser.Email})
 }
 
 // ────────────────────────────── Login ──────────────────────────────
@@ -196,7 +205,8 @@ func (h *Handler) Login(ctx *gin.Context) {
 	user := userdomain.User{Email: req.Email, AuthProvider: req.Provider, ProviderID: req.ProviderID, WebAuthToken: req.WebAuthToken}
 	loggedInUser, err := h.service.Login(spanCtx, req.Email, user, req.Password)
 	if err != nil {
-		reqLogger.Error("Login failed", err, map[string]interface{}{"email": req.Email})
+		reqLogger.Error("Login failed", err, map[string]any{"email": req.Email})
+		metrics.AuthLoginTotal.WithLabelValues("failure").Inc()
 		ctx.JSON(http.StatusUnauthorized, authdto.ErrorResponse{Success: false, Message: "Invalid email or password"})
 		return
 	}
@@ -213,10 +223,11 @@ func (h *Handler) Login(ctx *gin.Context) {
 		profilePicture = *loggedInUser.ProfilePicture
 	}
 
+	metrics.AuthLoginTotal.WithLabelValues("success").Inc()
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Login successful",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"user": authdto.LoginUserResponse{
 				ID: loggedInUser.ID.String(), Email: loggedInUser.Email,
 				ProfilePicture: profilePicture, AccountType: loggedInUser.AccountType,
@@ -260,17 +271,18 @@ func (h *Handler) RefreshToken(ctx *gin.Context) {
 		return
 	}
 
+	metrics.AuthTokenRefreshTotal.WithLabelValues("success").Inc()
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Token refreshed successfully",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"session": authdto.SessionResponse{
 				ID: session.ID, UserID: session.UserID, AccessToken: accessToken,
 				UserLoginType: session.UserLoginType, ExpiresAt: session.ExpiresAt, CreatedAt: session.CreatedAt,
 			},
 		},
 	})
-	reqLogger.Info("Token refreshed successfully", map[string]interface{}{"session_id": session.ID, "user_id": session.UserID})
+	reqLogger.Info("Token refreshed successfully", map[string]any{"session_id": session.ID, "user_id": session.UserID})
 }
 
 // ────────────────────────────── UpdatePersonalDetails ──────────────────────────────
@@ -295,7 +307,7 @@ func (h *Handler) UpdatePersonalDetails(ctx *gin.Context) {
 
 	currentUser, err := h.service.GetUserByID(spanCtx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to get user", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to get user", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to retrieve user data"})
 		return
 	}
@@ -317,7 +329,7 @@ func (h *Handler) UpdatePersonalDetails(ctx *gin.Context) {
 			status = appErr.StatusCode()
 			message = appErr.Error()
 		}
-		reqLogger.Error("Failed to update personal details", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to update personal details", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: message})
 		return
 	}
@@ -327,7 +339,10 @@ func (h *Handler) UpdatePersonalDetails(ctx *gin.Context) {
 		profilePicture = *updatedUser.ProfilePicture
 	}
 
-	profileCompletion, _ := h.service.GetProfileCompletionStatus(spanCtx, updatedUser.ID)
+	profileCompletion, pcErr := h.service.GetProfileCompletionStatus(spanCtx, updatedUser.ID)
+	if pcErr != nil {
+		reqLogger.Error("Failed to get profile completion status", pcErr, nil)
+	}
 	var completionData *authdto.ProfileCompletionResponse
 	if profileCompletion != nil {
 		completionData = &authdto.ProfileCompletionResponse{
@@ -340,7 +355,7 @@ func (h *Handler) UpdatePersonalDetails(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Personal details updated successfully",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"user": authdto.LoginUserResponse{
 				ID: updatedUser.ID.String(), Email: updatedUser.Email,
 				ProfilePicture: profilePicture, AccountType: updatedUser.AccountType,
@@ -351,7 +366,7 @@ func (h *Handler) UpdatePersonalDetails(ctx *gin.Context) {
 			"profile_completion": completionData,
 		},
 	})
-	reqLogger.Info("Personal details updated", map[string]interface{}{"user_id": updatedUser.ID})
+	reqLogger.Info("Personal details updated", map[string]any{"user_id": updatedUser.ID})
 }
 
 // ────────────────────────────── UpdateAddressDetails ──────────────────────────────
@@ -376,7 +391,7 @@ func (h *Handler) UpdateAddressDetails(ctx *gin.Context) {
 
 	currentUser, err := h.service.GetUserByID(spanCtx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to get user", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to get user", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to retrieve user data"})
 		return
 	}
@@ -395,12 +410,15 @@ func (h *Handler) UpdateAddressDetails(ctx *gin.Context) {
 			status = appErr.StatusCode()
 			message = appErr.Error()
 		}
-		reqLogger.Error("Failed to update address details", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to update address details", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: message})
 		return
 	}
 
-	profileCompletion, _ := h.service.GetProfileCompletionStatus(spanCtx, updatedUser.ID)
+	profileCompletion, pcErr2 := h.service.GetProfileCompletionStatus(spanCtx, updatedUser.ID)
+	if pcErr2 != nil {
+		reqLogger.Error("Failed to get profile completion status", pcErr2, nil)
+	}
 	var completionData *authdto.ProfileCompletionResponse
 	if profileCompletion != nil {
 		completionData = &authdto.ProfileCompletionResponse{
@@ -413,12 +431,12 @@ func (h *Handler) UpdateAddressDetails(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Address details updated successfully",
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"user":               updatedUser,
 			"profile_completion": completionData,
 		},
 	})
-	reqLogger.Info("Address details updated", map[string]interface{}{"user_id": updatedUser.ID})
+	reqLogger.Info("Address details updated", map[string]any{"user_id": updatedUser.ID})
 }
 
 // ────────────────────────────── UpdateBusinessDetails ──────────────────────────────
@@ -435,7 +453,11 @@ func (h *Handler) UpdateBusinessDetails(ctx *gin.Context) {
 		ctx.JSON(http.StatusUnauthorized, authdto.ErrorResponse{Success: false, Message: "Authorization payload not found"})
 		return
 	}
-	payload := authPayload.(*token.Payload)
+	payload, ok := authPayload.(*token.Payload)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Invalid authorization payload"})
+		return
+	}
 
 	var req authdto.RegisterBusinessDetailsRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -459,13 +481,13 @@ func (h *Handler) UpdateBusinessDetails(ctx *gin.Context) {
 
 	_, err := h.service.RegisterBusinessDetails(spanCtx, companyInfo)
 	if err != nil {
-		reqLogger.Error("Failed to update business details", err, map[string]interface{}{"user_id": payload.UserID})
+		reqLogger.Error("Failed to update business details", err, map[string]any{"user_id": payload.UserID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to update business details"})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "Business details updated successfully"})
-	reqLogger.Info("Business details updated", map[string]interface{}{"user_id": payload.UserID})
+	reqLogger.Info("Business details updated", map[string]any{"user_id": payload.UserID})
 }
 
 // ────────────────────────────── GetProfileCompletion ──────────────────────────────
@@ -484,7 +506,7 @@ func (h *Handler) GetProfileCompletion(ctx *gin.Context) {
 
 	profileCompletion, err := h.service.GetProfileCompletionStatus(spanCtx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to get profile completion status", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to get profile completion status", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to get profile completion status"})
 		return
 	}
@@ -534,12 +556,16 @@ func (h *Handler) LinkWallet(ctx *gin.Context) {
 			status = http.StatusBadRequest
 			message = "Invalid wallet address format"
 		}
-		reqLogger.Error("Failed to link wallet", err, map[string]interface{}{"user_id": userUUID, "address": req.Address})
+		reqLogger.Error("Failed to link wallet", err, map[string]any{"user_id": userUUID, "address": req.Address})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: message})
 		return
 	}
 
-	wallets, _ := h.service.GetUserWallets(spanCtx, userUUID)
+	wallets, walletsErr2 := h.service.GetUserWallets(spanCtx, userUUID)
+	if walletsErr2 != nil {
+		reqLogger.Error("Failed to get user wallets", walletsErr2, nil)
+		wallets = nil
+	}
 	walletResponses := make([]authdto.UserWalletResponse, len(wallets))
 	for i, w := range wallets {
 		walletResponses[i] = authdto.UserWalletResponse{ID: w.ID.String(), Address: w.Address, Type: w.Type, Chain: w.Chain, IsDefault: w.IsDefault}
@@ -548,9 +574,9 @@ func (h *Handler) LinkWallet(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Wallet linked successfully",
-		Data:    map[string]interface{}{"wallets": walletResponses},
+		Data:    map[string]any{"wallets": walletResponses},
 	})
-	reqLogger.Info("Wallet linked successfully", map[string]interface{}{"user_id": userUUID, "address": req.Address})
+	reqLogger.Info("Wallet linked successfully", map[string]any{"user_id": userUUID, "address": req.Address})
 }
 
 // ────────────────────────────── GetWallets ──────────────────────────────
@@ -566,7 +592,7 @@ func (h *Handler) GetWallets(ctx *gin.Context) {
 
 	wallets, err := h.service.GetUserWallets(spanCtx, userUUID)
 	if err != nil {
-		h.logger.Error("Failed to get user wallets", err, map[string]interface{}{"user_id": userUUID})
+		h.logger.Error("Failed to get user wallets", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to retrieve wallets"})
 		return
 	}
@@ -579,7 +605,7 @@ func (h *Handler) GetWallets(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Wallets retrieved successfully",
-		Data:    map[string]interface{}{"wallets": walletResponses},
+		Data:    map[string]any{"wallets": walletResponses},
 	})
 }
 
@@ -596,7 +622,7 @@ func (h *Handler) GetUserDevices(ctx *gin.Context) {
 
 	devices, err := h.service.GetActiveDevices(spanCtx, userUUID)
 	if err != nil {
-		h.logger.Error("Failed to get active devices", err, map[string]interface{}{"user_id": userUUID})
+		h.logger.Error("Failed to get active devices", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to retrieve active devices"})
 		return
 	}
@@ -618,7 +644,7 @@ func (h *Handler) GetUserDevices(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Active devices retrieved",
-		Data:    map[string]interface{}{"devices": deviceResponses},
+		Data:    map[string]any{"devices": deviceResponses},
 	})
 }
 
@@ -664,12 +690,16 @@ func (h *Handler) RevokeDevice(ctx *gin.Context) {
 			status = http.StatusForbidden
 			message = "Session does not belong to user"
 		}
-		reqLogger.Error("Failed to revoke device", err, map[string]interface{}{"user_id": userUUID, "session_id": sessionID})
+		reqLogger.Error("Failed to revoke device", err, map[string]any{"user_id": userUUID, "session_id": sessionID})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: message})
 		return
 	}
 
-	devices, _ := h.service.GetActiveDevices(spanCtx, userUUID)
+	devices, devErr := h.service.GetActiveDevices(spanCtx, userUUID)
+	if devErr != nil {
+		reqLogger.Error("Failed to get active devices after revoke", devErr, nil)
+		devices = nil
+	}
 	deviceResponses := make([]authdto.DeviceResponse, len(devices))
 	for i, d := range devices {
 		deviceResponses[i] = authdto.DeviceResponse{
@@ -682,9 +712,9 @@ func (h *Handler) RevokeDevice(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Device revoked successfully",
-		Data:    map[string]interface{}{"devices": deviceResponses},
+		Data:    map[string]any{"devices": deviceResponses},
 	})
-	reqLogger.Info("Device revoked", map[string]interface{}{"user_id": userUUID, "session_id": sessionID})
+	reqLogger.Info("Device revoked", map[string]any{"user_id": userUUID, "session_id": sessionID})
 }
 
 // ────────────────────────────── GetUserSecurityEvents ──────────────────────────────
@@ -709,7 +739,7 @@ func (h *Handler) GetUserSecurityEvents(ctx *gin.Context) {
 
 	events, err := h.service.GetUserSecurityEvents(spanCtx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to get security events", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to get security events", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to get security events"})
 		return
 	}
@@ -729,7 +759,7 @@ func (h *Handler) GetUserSecurityEvents(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "Security events retrieved",
-		Data:    map[string]interface{}{"events": eventResponses},
+		Data:    map[string]any{"events": eventResponses},
 	})
 }
 
@@ -749,7 +779,7 @@ func (h *Handler) SetupMFA(ctx *gin.Context) {
 
 	totpURI, err := h.service.SetupMFA(spanCtx, userUUID)
 	if err != nil {
-		reqLogger.Error("Failed to set up MFA", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to set up MFA", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to set up MFA: " + err.Error()})
 		return
 	}
@@ -757,9 +787,9 @@ func (h *Handler) SetupMFA(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{
 		Success: true,
 		Message: "MFA setup initiated",
-		Data:    map[string]interface{}{"totp_uri": totpURI},
+		Data:    map[string]any{"totp_uri": totpURI},
 	})
-	reqLogger.Info("MFA setup initiated", map[string]interface{}{"user_id": userUUID})
+	reqLogger.Info("MFA setup initiated", map[string]any{"user_id": userUUID})
 }
 
 // ────────────────────────────── VerifyMFA ──────────────────────────────
@@ -784,7 +814,7 @@ func (h *Handler) VerifyMFA(ctx *gin.Context) {
 
 	valid, err := h.service.VerifyMFA(spanCtx, userUUID, req.Code)
 	if err != nil {
-		reqLogger.Error("Failed to verify MFA code", err, map[string]interface{}{"user_id": userUUID})
+		reqLogger.Error("Failed to verify MFA code", err, map[string]any{"user_id": userUUID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to verify MFA code: " + err.Error()})
 		return
 	}
@@ -795,7 +825,7 @@ func (h *Handler) VerifyMFA(ctx *gin.Context) {
 
 	ctx.Set("mfa_verified", true)
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "MFA code verified successfully"})
-	reqLogger.Info("MFA code verified", map[string]interface{}{"user_id": userUUID})
+	reqLogger.Info("MFA code verified", map[string]any{"user_id": userUUID})
 }
 
 // ────────────────────────────── Logout ──────────────────────────────
@@ -827,7 +857,7 @@ func (h *Handler) Logout(ctx *gin.Context) {
 			return
 		}
 		if err := h.service.Logout(spanCtx, sessionUUID); err != nil {
-			reqLogger.Error("Failed to logout", err, map[string]interface{}{"session_id": sessionUUID})
+			reqLogger.Error("Failed to logout", err, map[string]any{"session_id": sessionUUID})
 			ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to logout: " + err.Error()})
 			return
 		}
@@ -841,12 +871,12 @@ func (h *Handler) Logout(ctx *gin.Context) {
 		return
 	}
 	if err := h.service.Logout(spanCtx, sessionID); err != nil {
-		reqLogger.Error("Failed to logout", err, map[string]interface{}{"session_id": sessionID})
+		reqLogger.Error("Failed to logout", err, map[string]any{"session_id": sessionID})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to logout: " + err.Error()})
 		return
 	}
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "Logged out successfully"})
-	reqLogger.Info("User logged out", map[string]interface{}{"session_id": sessionID})
+	reqLogger.Info("User logged out", map[string]any{"session_id": sessionID})
 }
 
 // ────────────────────────────── InitiatePasswordReset ──────────────────────────────
@@ -872,13 +902,13 @@ func (h *Handler) InitiatePasswordReset(ctx *gin.Context) {
 			})
 			return
 		}
-		reqLogger.Error("Password reset initiation failed", err, map[string]interface{}{"email": req.Email})
+		reqLogger.Error("Password reset initiation failed", err, map[string]any{"email": req.Email})
 		ctx.JSON(http.StatusInternalServerError, authdto.ErrorResponse{Success: false, Message: "Failed to process password reset request"})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "If this email exists, you will receive password reset instructions"})
-	reqLogger.Info("Password reset initiated", map[string]interface{}{"email": req.Email})
+	reqLogger.Info("Password reset initiated", map[string]any{"email": req.Email})
 }
 
 // ────────────────────────────── VerifyResetOTP ──────────────────────────────
@@ -901,13 +931,13 @@ func (h *Handler) VerifyResetOTP(ctx *gin.Context) {
 		if err.Error() == "maximum attempts exceeded" {
 			status = http.StatusTooManyRequests
 		}
-		reqLogger.Error("OTP verification failed", err, map[string]interface{}{"email": req.Email})
+		reqLogger.Error("OTP verification failed", err, map[string]any{"email": req.Email})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: err.Error()})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "OTP verified successfully"})
-	reqLogger.Info("OTP verified successfully", map[string]interface{}{"email": req.Email})
+	reqLogger.Info("OTP verified successfully", map[string]any{"email": req.Email})
 }
 
 // ────────────────────────────── ResetPassword ──────────────────────────────
@@ -941,13 +971,13 @@ func (h *Handler) ResetPassword(ctx *gin.Context) {
 			status = http.StatusInternalServerError
 			message = "Failed to reset password"
 		}
-		reqLogger.Error("Password reset failed", err, map[string]interface{}{"email": req.Email})
+		reqLogger.Error("Password reset failed", err, map[string]any{"email": req.Email})
 		ctx.JSON(status, authdto.ErrorResponse{Success: false, Message: message})
 		return
 	}
 
 	ctx.JSON(http.StatusOK, authdto.SuccessResponse{Success: true, Message: "Password reset successful. Please login with your new password."})
-	reqLogger.Info("Password reset successful", map[string]interface{}{"email": req.Email})
+	reqLogger.Info("Password reset successful", map[string]any{"email": req.Email})
 }
 
 // ────────────────────────────── helpers ──────────────────────────────

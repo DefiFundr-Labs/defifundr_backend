@@ -17,5 +17,5 @@ type WaitlistEntry struct {
 	SignupDate     time.Time              `json:"signup_date"`
 	InvitedDate    *time.Time             `json:"invited_date,omitempty"`
 	RegisteredDate *time.Time             `json:"registered_date,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
 }

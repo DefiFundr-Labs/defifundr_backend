@@ -11,20 +11,20 @@ import (
 
 // AsyncQueue is a simple in-memory queue for async processing
 type AsyncQueue struct {
-	queue     chan interface{}
+	queue     chan any
 	logger    logging.Logger
 	workers   int
 	wg        sync.WaitGroup
-	processor func(interface{}) error
+	processor func(any) error
 	stopCh    chan struct{}
 	mu        sync.Mutex
 	running   bool
 }
 
 // NewAsyncQueue creates a new async queue
-func NewAsyncQueue(capacity int, workers int, logger logging.Logger, processor func(interface{}) error) *AsyncQueue {
+func NewAsyncQueue(capacity int, workers int, logger logging.Logger, processor func(any) error) *AsyncQueue {
 	return &AsyncQueue{
-		queue:     make(chan interface{}, capacity),
+		queue:     make(chan any, capacity),
 		logger:    logger,
 		workers:   workers,
 		processor: processor,
@@ -49,7 +49,7 @@ func (q *AsyncQueue) Start() {
 		go q.worker(i)
 	}
 
-	q.logger.Info("AsyncQueue started", map[string]interface{}{
+	q.logger.Info("AsyncQueue started", map[string]any{
 		"workers":  q.workers,
 		"capacity": cap(q.queue),
 	})
@@ -71,7 +71,7 @@ func (q *AsyncQueue) Stop() {
 }
 
 // Enqueue adds an item to the queue
-func (q *AsyncQueue) Enqueue(item interface{}) error {
+func (q *AsyncQueue) Enqueue(item any) error {
 	select {
 	case q.queue <- item:
 		return nil
@@ -81,7 +81,7 @@ func (q *AsyncQueue) Enqueue(item interface{}) error {
 }
 
 // EnqueueWithContext adds an item to the queue with context
-func (q *AsyncQueue) EnqueueWithContext(ctx context.Context, item interface{}) error {
+func (q *AsyncQueue) EnqueueWithContext(ctx context.Context, item any) error {
 	select {
 	case q.queue <- item:
 		return nil
@@ -96,20 +96,20 @@ func (q *AsyncQueue) EnqueueWithContext(ctx context.Context, item interface{}) e
 func (q *AsyncQueue) worker(id int) {
 	defer q.wg.Done()
 
-	q.logger.Info("AsyncQueue worker started", map[string]interface{}{
+	q.logger.Info("AsyncQueue worker started", map[string]any{
 		"worker_id": id,
 	})
 
 	for {
 		select {
 		case <-q.stopCh:
-			q.logger.Info("AsyncQueue worker stopping", map[string]interface{}{
+			q.logger.Info("AsyncQueue worker stopping", map[string]any{
 				"worker_id": id,
 			})
 			return
 		case item, ok := <-q.queue:
 			if !ok {
-				q.logger.Info("AsyncQueue channel closed", map[string]interface{}{
+				q.logger.Info("AsyncQueue channel closed", map[string]any{
 					"worker_id": id,
 				})
 				return
@@ -117,7 +117,7 @@ func (q *AsyncQueue) worker(id int) {
 
 			err := q.processor(item)
 			if err != nil {
-				q.logger.Error("Failed to process item", err, map[string]interface{}{
+				q.logger.Error("Failed to process item", err, map[string]any{
 					"worker_id": id,
 				})
 			}

@@ -92,7 +92,7 @@ func (a *authUseCase) SetupMFA(ctx context.Context, userID uuid.UUID) (string, e
 		return "", fmt.Errorf("failed to store MFA secret: %w", err)
 	}
 
-	a.LogSecurityEvent(ctx, "mfa_setup_initiated", userID, map[string]interface{}{"time": time.Now().Format(time.RFC3339)})
+	a.LogSecurityEvent(ctx, "mfa_setup_initiated", userID, map[string]any{"time": time.Now().Format(time.RFC3339)})
 	return key.URL(), nil
 }
 
@@ -106,7 +106,7 @@ func (a *authUseCase) VerifyMFA(ctx context.Context, userID uuid.UUID, code stri
 		return false, fmt.Errorf("failed to get MFA secret: %w", err)
 	}
 	valid := totp.Validate(code, secret)
-	a.LogSecurityEvent(ctx, "mfa_verification", userID, map[string]interface{}{"success": valid})
+	a.LogSecurityEvent(ctx, "mfa_verification", userID, map[string]any{"success": valid})
 	return valid, nil
 }
 
@@ -282,7 +282,7 @@ func (a *authUseCase) GetProfileCompletionStatus(ctx context.Context, userID uui
 	type fieldCheck struct {
 		name     string
 		required bool
-		value    interface{}
+		value    any
 	}
 	fields := []fieldCheck{
 		{"First Name", true, user.FirstName != ""},
@@ -370,7 +370,7 @@ func (a *authUseCase) AuthenticateWithWeb3(ctx context.Context, webAuthToken, us
 			return nil, nil, fmt.Errorf("failed to create user: %w", err)
 		}
 		isNewUser = true
-		a.LogSecurityEvent(ctx, "user_registered", user.ID, map[string]interface{}{"provider": user.AuthProvider, "email": user.Email})
+		a.LogSecurityEvent(ctx, "user_registered", user.ID, map[string]any{"provider": user.AuthProvider, "email": user.Email})
 	} else {
 		user = existingUser
 		updateNeeded := false
@@ -391,7 +391,7 @@ func (a *authUseCase) AuthenticateWithWeb3(ctx context.Context, webAuthToken, us
 	if len(claims.Wallets) > 0 {
 		for _, wallet := range claims.Wallets {
 			if err := a.processWallet(ctx, user.ID, wallet); err != nil {
-				a.logger.Warn("Failed to process wallet", map[string]interface{}{"user_id": user.ID, "error": err.Error()})
+				a.logger.Warn("Failed to process wallet", map[string]any{"user_id": user.ID, "error": err.Error()})
 			}
 		}
 	}
@@ -401,7 +401,7 @@ func (a *authUseCase) AuthenticateWithWeb3(ctx context.Context, webAuthToken, us
 		return nil, nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	a.LogSecurityEvent(ctx, "user_login", user.ID, map[string]interface{}{"provider": user.AuthProvider, "ip": clientIP, "is_new_user": isNewUser})
+	a.LogSecurityEvent(ctx, "user_login", user.ID, map[string]any{"provider": user.AuthProvider, "ip": clientIP, "is_new_user": isNewUser})
 	go a.detectSuspiciousActivity(context.Background(), user.ID, clientIP, userAgent)
 
 	return user, session, nil
@@ -419,7 +419,7 @@ func (a *authUseCase) processWallet(ctx context.Context, userID uuid.UUID, walle
 		return nil
 	}
 	if existing != nil && existing.UserID != userID {
-		a.LogSecurityEvent(ctx, "wallet_conflict", userID, map[string]interface{}{"wallet_address": wallet.PublicKey})
+		a.LogSecurityEvent(ctx, "wallet_conflict", userID, map[string]any{"wallet_address": wallet.PublicKey})
 		return fmt.Errorf("wallet already linked to another account")
 	}
 	chain := "ethereum"
@@ -434,7 +434,7 @@ func (a *authUseCase) LinkWallet(ctx context.Context, userID uuid.UUID, walletAd
 	ctx, span := tracing.Tracer("auth-usecase").Start(ctx, "LinkWallet")
 	defer span.End()
 
-	a.LogSecurityEvent(ctx, "wallet_linked", userID, map[string]interface{}{"wallet_address": walletAddress, "wallet_type": walletType, "chain": chain})
+	a.LogSecurityEvent(ctx, "wallet_linked", userID, map[string]any{"wallet_address": walletAddress, "wallet_type": walletType, "chain": chain})
 	return nil
 }
 
@@ -482,7 +482,7 @@ func (a *authUseCase) CreateSession(ctx context.Context, userID uuid.UUID, userA
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	a.logger.Info("Session created", map[string]interface{}{"session_id": session.ID, "expires_at": payload.ExpiredAt})
+	a.logger.Info("Session created", map[string]any{"session_id": session.ID, "expires_at": payload.ExpiredAt})
 	return userSession, nil
 }
 
@@ -527,7 +527,7 @@ func (a *authUseCase) RevokeSession(ctx context.Context, userID, sessionID uuid.
 	if err := a.sessionRepo.BlockSession(ctx, sessionID); err != nil {
 		return fmt.Errorf("failed to block session: %w", err)
 	}
-	a.LogSecurityEvent(ctx, "session_revoked", userID, map[string]interface{}{"session_id": sessionID})
+	a.LogSecurityEvent(ctx, "session_revoked", userID, map[string]any{"session_id": sessionID})
 	return nil
 }
 
@@ -571,7 +571,7 @@ func (a *authUseCase) RefreshToken(ctx context.Context, refreshToken, userAgent,
 		return nil, "", fmt.Errorf("failed to update refresh token: %w", err)
 	}
 
-	a.LogSecurityEvent(ctx, "token_refreshed", user.ID, map[string]interface{}{"session_id": session.ID, "ip": clientIP})
+	a.LogSecurityEvent(ctx, "token_refreshed", user.ID, map[string]any{"session_id": session.ID, "ip": clientIP})
 	return updatedSession, accessToken, nil
 }
 
@@ -601,7 +601,7 @@ func (a *authUseCase) CheckEmailExists(ctx context.Context, email string) (bool,
 }
 
 // LogSecurityEvent logs a security event.
-func (a *authUseCase) LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]interface{}) error {
+func (a *authUseCase) LogSecurityEvent(ctx context.Context, eventType string, userID uuid.UUID, metadata map[string]any) error {
 	ctx, span := tracing.Tracer("auth-usecase").Start(ctx, "LogSecurityEvent")
 	defer span.End()
 
@@ -661,9 +661,9 @@ func (a *authUseCase) InitiatePasswordReset(ctx context.Context, email string) e
 		return nil // Don't reveal internal errors
 	}
 	if err := a.emailService.SendPasswordResetEmail(ctx, email, user.FirstName, otpCode); err != nil {
-		a.logger.Error("Failed to send password reset email", err, map[string]interface{}{"email": email})
+		a.logger.Error("Failed to send password reset email", err, map[string]any{"email": email})
 	}
-	a.LogSecurityEvent(ctx, "password_reset_initiated", user.ID, map[string]interface{}{"email": email})
+	a.LogSecurityEvent(ctx, "password_reset_initiated", user.ID, map[string]any{"email": email})
 	return nil
 }
 
@@ -687,7 +687,7 @@ func (a *authUseCase) VerifyResetOTP(ctx context.Context, email, code string) er
 		a.otpRepo.IncrementAttempts(ctx, otp.ID)
 		return errors.New("invalid OTP")
 	}
-	a.LogSecurityEvent(ctx, "password_reset_otp_verified", user.ID, map[string]interface{}{"email": email})
+	a.LogSecurityEvent(ctx, "password_reset_otp_verified", user.ID, map[string]any{"email": email})
 	return nil
 }
 
@@ -717,7 +717,7 @@ func (a *authUseCase) ResetPassword(ctx context.Context, email, code, newPasswor
 	}
 	a.otpRepo.VerifyOTP(ctx, otp.ID, code)
 	a.sessionRepo.BlockAllUserSessions(ctx, user.ID)
-	a.LogSecurityEvent(ctx, "password_reset_completed", user.ID, map[string]interface{}{"email": email})
+	a.LogSecurityEvent(ctx, "password_reset_completed", user.ID, map[string]any{"email": email})
 	return nil
 }
 
@@ -759,7 +759,7 @@ func (a *authUseCase) detectSuspiciousActivity(ctx context.Context, userID uuid.
 			IPAddress: clientIP,
 			UserAgent: userAgent,
 			EventType: "new_ip_device_detected",
-			Metadata:  map[string]interface{}{"device": deviceInfo, "time": loginTime},
+			Metadata:  map[string]any{"device": deviceInfo, "time": loginTime},
 			Timestamp: time.Now(),
 		})
 	}

@@ -15,8 +15,8 @@ import (
 )
 
 type waitlistUseCase struct {
-	repo         waitlistport.Repository
-	emailSender  waitlistport.EmailSender
+	repo        waitlistport.Repository
+	emailSender waitlistport.EmailSender
 }
 
 // New creates a new waitlist use case.
@@ -49,7 +49,7 @@ func (uc *waitlistUseCase) JoinWaitlist(ctx context.Context, email, fullName, re
 		ReferralSource: referralSource,
 		Status:         "waiting",
 		SignupDate:     time.Now(),
-		Metadata:       make(map[string]interface{}),
+		Metadata:       make(map[string]any),
 	}
 
 	saved, err := uc.repo.CreateWaitlistEntry(ctx, entry)
@@ -63,7 +63,7 @@ func (uc *waitlistUseCase) JoinWaitlist(ctx context.Context, email, fullName, re
 	}
 
 	if sendErr := uc.emailSender.SendWaitlistConfirmation(ctx, email, fullName, referralCode, position); sendErr != nil {
-		fmt.Printf("Failed to send waitlist confirmation email: %v\n", sendErr)
+		_ = fmt.Errorf("failed to send waitlist confirmation email: %w", sendErr)
 	}
 
 	return saved, nil
@@ -98,7 +98,7 @@ func (uc *waitlistUseCase) GetWaitlistPosition(ctx context.Context, id uuid.UUID
 }
 
 // GetWaitlistStats implements waitlistport.Service
-func (uc *waitlistUseCase) GetWaitlistStats(ctx context.Context) (map[string]interface{}, error) {
+func (uc *waitlistUseCase) GetWaitlistStats(ctx context.Context) (map[string]any, error) {
 	ctx, span := tracing.Tracer("waitlist-usecase").Start(ctx, "GetWaitlistStats")
 	defer span.End()
 
@@ -127,7 +127,7 @@ func (uc *waitlistUseCase) GetWaitlistStats(ctx context.Context) (map[string]int
 		}
 	}
 
-	stats := map[string]interface{}{
+	stats := map[string]any{
 		"total_signups":    len(waiting) + len(invited) + len(registered),
 		"waiting_count":    len(waiting),
 		"invited_count":    len(invited),

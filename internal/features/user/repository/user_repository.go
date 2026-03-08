@@ -3,6 +3,7 @@ package userrepo
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	db "github.com/demola234/defifundr/db/sqlc"
 	userdomain "github.com/demola234/defifundr/internal/features/user/domain"
@@ -75,11 +76,31 @@ func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*use
 }
 
 func (r *UserRepository) GetUserCompanyInfo(ctx context.Context, id uuid.UUID) (*userdomain.CompanyInfo, error) {
-	return nil, errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "GetUserCompanyInfo")
+	defer span.End()
+	companies, err := r.store.GetCompaniesByOwner(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %w", err)
+	}
+	if len(companies) == 0 {
+		return &userdomain.CompanyInfo{UserID: id}, nil
+	}
+	return mapCompanyToDomain(companies[0], id), nil
 }
 
 func (r *UserRepository) UpdateUser(ctx context.Context, user userdomain.User) (*userdomain.User, error) {
-	return nil, errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdateUser")
+	defer span.End()
+	dbUser, err := r.store.UpdateUser(ctx, db.UpdateUserParams{
+		PasswordHash: toPgText(user.PasswordHash),
+		AuthProvider: toPgText(user.AuthProvider),
+		ProviderID:   toPgText(user.ProviderID),
+		ID:           user.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mapDBUserToDomain(dbUser), nil
 }
 
 func (r *UserRepository) UpdateUserPersonalDetails(ctx context.Context, user userdomain.User) (*userdomain.User, error) {
@@ -127,11 +148,70 @@ func (r *UserRepository) UpdateUserAddressDetails(ctx context.Context, user user
 }
 
 func (r *UserRepository) UpdateUserBusinessDetails(ctx context.Context, companyInfo userdomain.CompanyInfo) (*userdomain.CompanyInfo, error) {
-	return nil, errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdateUserBusinessDetails")
+	defer span.End()
+	name := ""
+	if companyInfo.CompanyName != nil {
+		name = *companyInfo.CompanyName
+	}
+	// Check if company exists for this owner
+	existing, err := r.store.GetCompaniesByOwner(ctx, companyInfo.UserID)
+	if err != nil || len(existing) == 0 {
+		// Create new company
+		params := db.CreateCompanyParams{
+			OwnerID:     companyInfo.UserID,
+			CompanyName: name,
+		}
+		if companyInfo.CompanySize != nil {
+			params.CompanySize = pgtype.Text{String: *companyInfo.CompanySize, Valid: true}
+		}
+		if companyInfo.CompanyIndustry != nil {
+			params.CompanyIndustry = pgtype.Text{String: *companyInfo.CompanyIndustry, Valid: true}
+		}
+		if companyInfo.CompanyDescription != nil {
+			params.CompanyDescription = pgtype.Text{String: *companyInfo.CompanyDescription, Valid: true}
+		}
+		if companyInfo.CompanyHeadquarters != nil {
+			params.CompanyHeadquarters = pgtype.Text{String: *companyInfo.CompanyHeadquarters, Valid: true}
+		}
+		c, err := r.store.CreateCompany(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create company: %w", err)
+		}
+		return mapCompanyToDomain(c, companyInfo.UserID), nil
+	}
+	// Update existing company
+	params := db.UpdateCompanyParams{
+		ID:          existing[0].ID,
+		CompanyName: name,
+	}
+	if companyInfo.CompanySize != nil {
+		params.CompanySize = pgtype.Text{String: *companyInfo.CompanySize, Valid: true}
+	}
+	if companyInfo.CompanyIndustry != nil {
+		params.CompanyIndustry = pgtype.Text{String: *companyInfo.CompanyIndustry, Valid: true}
+	}
+	if companyInfo.CompanyDescription != nil {
+		params.CompanyDescription = pgtype.Text{String: *companyInfo.CompanyDescription, Valid: true}
+	}
+	if companyInfo.CompanyHeadquarters != nil {
+		params.CompanyHeadquarters = pgtype.Text{String: *companyInfo.CompanyHeadquarters, Valid: true}
+	}
+	c, err := r.store.UpdateCompany(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update company: %w", err)
+	}
+	return mapCompanyToDomain(c, companyInfo.UserID), nil
 }
 
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string) error {
-	return errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "UpdatePassword")
+	defer span.End()
+	_, err := r.store.UpdateUser(ctx, db.UpdateUserParams{
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+		ID:           userID,
+	})
+	return err
 }
 
 func (r *UserRepository) CheckEmailExists(ctx context.Context, email string) (bool, error) {
@@ -140,7 +220,13 @@ func (r *UserRepository) CheckEmailExists(ctx context.Context, email string) (bo
 }
 
 func (r *UserRepository) DeactivateUser(ctx context.Context, id uuid.UUID) error {
-	return errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "DeactivateUser")
+	defer span.End()
+	_, err := r.store.UpdateUser(ctx, db.UpdateUserParams{
+		AccountStatus: pgtype.Text{String: "deactivated", Valid: true},
+		ID:            id,
+	})
+	return err
 }
 
 func (r *UserRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
@@ -150,11 +236,27 @@ func (r *UserRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *UserRepository) SetMFASecret(ctx context.Context, userID uuid.UUID, secret string) error {
-	return errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "SetMFASecret")
+	defer span.End()
+	_, err := r.store.UpdateUser(ctx, db.UpdateUserParams{
+		TwoFactorEnabled: pgtype.Bool{Bool: true, Valid: true},
+		TwoFactorMethod:  pgtype.Text{String: secret, Valid: true},
+		ID:               userID,
+	})
+	return err
 }
 
 func (r *UserRepository) GetMFASecret(ctx context.Context, userID uuid.UUID) (string, error) {
-	return "", errors.New("not implemented")
+	ctx, span := tracing.Tracer("user-repository").Start(ctx, "GetMFASecret")
+	defer span.End()
+	dbUser, err := r.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if !dbUser.TwoFactorMethod.Valid {
+		return "", errors.New("MFA not configured for user")
+	}
+	return dbUser.TwoFactorMethod.String, nil
 }
 
 // --- helpers ---
@@ -197,6 +299,29 @@ func mapDBUserToDomain(dbUser db.Users) *userdomain.User {
 		u.UpdatedAt = dbUser.UpdatedAt.Time
 	}
 	return u
+}
+
+func mapCompanyToDomain(c db.Companies, userID uuid.UUID) *userdomain.CompanyInfo {
+	info := &userdomain.CompanyInfo{UserID: userID}
+	if c.CompanyName != "" {
+		info.CompanyName = &c.CompanyName
+	}
+	if c.CompanySize.Valid {
+		info.CompanySize = &c.CompanySize.String
+	}
+	if c.CompanyIndustry.Valid {
+		info.CompanyIndustry = &c.CompanyIndustry.String
+	}
+	if c.CompanyDescription.Valid {
+		info.CompanyDescription = &c.CompanyDescription.String
+	}
+	if c.CompanyHeadquarters.Valid {
+		info.CompanyHeadquarters = &c.CompanyHeadquarters.String
+	}
+	if c.CompanyWebsite.Valid {
+		info.CompanyWebsite = &c.CompanyWebsite.String
+	}
+	return info
 }
 
 func enrichWithPersonal(u *userdomain.User, p db.GetPersonalUserByIDRow) {

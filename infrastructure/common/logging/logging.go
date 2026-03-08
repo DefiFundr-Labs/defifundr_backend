@@ -13,13 +13,13 @@ import (
 
 // Logger is the interface for all logging methods
 type Logger interface {
-	Debug(msg string, fields ...map[string]interface{})
-	Info(msg string, fields ...map[string]interface{})
-	Warn(msg string, fields ...map[string]interface{})
-	Error(msg string, err error, fields ...map[string]interface{})
-	Fatal(msg string, err error, fields ...map[string]interface{})
-	Panic(msg string, err error, fields ...map[string]interface{})
-	With(key string, value interface{}) Logger
+	Debug(msg string, fields ...map[string]any)
+	Info(msg string, fields ...map[string]any)
+	Warn(msg string, fields ...map[string]any)
+	Error(msg string, err error, fields ...map[string]any)
+	Fatal(msg string, err error, fields ...map[string]any)
+	Panic(msg string, err error, fields ...map[string]any)
+	With(key string, value any) Logger
 	GetZerologLogger() *zerolog.Logger
 }
 
@@ -82,7 +82,7 @@ func New(cfg *config.Config) Logger {
 }
 
 // Debug logs a debug message
-func (l *AppLogger) Debug(msg string, fields ...map[string]interface{}) {
+func (l *AppLogger) Debug(msg string, fields ...map[string]any) {
 	event := l.logger.Debug()
 	for _, field := range fields {
 		for k, v := range field {
@@ -93,7 +93,7 @@ func (l *AppLogger) Debug(msg string, fields ...map[string]interface{}) {
 }
 
 // Info logs an info message
-func (l *AppLogger) Info(msg string, fields ...map[string]interface{}) {
+func (l *AppLogger) Info(msg string, fields ...map[string]any) {
 	event := l.logger.Info()
 	for _, field := range fields {
 		for k, v := range field {
@@ -104,7 +104,7 @@ func (l *AppLogger) Info(msg string, fields ...map[string]interface{}) {
 }
 
 // Warn logs a warning message
-func (l *AppLogger) Warn(msg string, fields ...map[string]interface{}) {
+func (l *AppLogger) Warn(msg string, fields ...map[string]any) {
 	event := l.logger.Warn()
 	for _, field := range fields {
 		for k, v := range field {
@@ -115,7 +115,7 @@ func (l *AppLogger) Warn(msg string, fields ...map[string]interface{}) {
 }
 
 // Error logs an error message
-func (l *AppLogger) Error(msg string, err error, fields ...map[string]interface{}) {
+func (l *AppLogger) Error(msg string, err error, fields ...map[string]any) {
 	event := l.logger.Error()
 	if err != nil {
 		event = event.Err(err)
@@ -129,7 +129,7 @@ func (l *AppLogger) Error(msg string, err error, fields ...map[string]interface{
 }
 
 // Fatal logs a fatal message and exits
-func (l *AppLogger) Fatal(msg string, err error, fields ...map[string]interface{}) {
+func (l *AppLogger) Fatal(msg string, err error, fields ...map[string]any) {
 	event := l.logger.Fatal()
 	if err != nil {
 		event = event.Err(err)
@@ -143,7 +143,7 @@ func (l *AppLogger) Fatal(msg string, err error, fields ...map[string]interface{
 }
 
 // Panic logs a fatal message and exits
-func (l *AppLogger) Panic(msg string, err error, fields ...map[string]interface{}) {
+func (l *AppLogger) Panic(msg string, err error, fields ...map[string]any) {
 	event := l.logger.Panic()
 	if err != nil {
 		event = event.Err(err)
@@ -157,7 +157,7 @@ func (l *AppLogger) Panic(msg string, err error, fields ...map[string]interface{
 }
 
 // With returns a logger with the given key-value pair added to the context
-func (l *AppLogger) With(key string, value interface{}) Logger {
+func (l *AppLogger) With(key string, value any) Logger {
 	newLogger := l.logger.With().Interface(key, value).Logger()
 	return &AppLogger{
 		logger: &newLogger,

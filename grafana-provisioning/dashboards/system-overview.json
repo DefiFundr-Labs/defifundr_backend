@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "system-overview",
-  "title": "System Overview",
+  "title": "DefiFundr - System Overview",
   "tags": ["system", "overview"],
   "timezone": "browser",
   "schemaVersion": 36,
@@ -11,42 +11,73 @@
     {
       "type": "stat",
       "title": "API Up",
-      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
-      "targets": [
-        {
-          "expr": "up{job=\"defifundr-api\"}",
-          "legendFormat": "API",
-          "refId": "A"
-        }
-      ],
+      "gridPos": {"x": 0, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "up{job=\"defifundr-api\"}", "legendFormat": "API", "refId": "A"}],
       "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
-      "fieldConfig": {"defaults": {"unit": "none"}, "overrides": []}
+      "fieldConfig": {"defaults": {"unit": "none", "mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}, "overrides": []}
     },
     {
-      "type": "graph",
-      "title": "API Request Rate",
-      "gridPos": {"x": 6, "y": 0, "w": 12, "h": 8},
+      "type": "stat",
+      "title": "Requests In-Flight",
+      "gridPos": {"x": 4, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "http_requests_in_flight", "legendFormat": "In-Flight", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Total Requests",
+      "gridPos": {"x": 8, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "sum(http_requests_total)", "legendFormat": "Total", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "Error Rate (5xx)",
+      "gridPos": {"x": 12, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) or vector(0)", "legendFormat": "5xx/s", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "reqps", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.1}]}}, "overrides": []}
+    },
+    {
+      "type": "stat",
+      "title": "P99 Latency",
+      "gridPos": {"x": 16, "y": 0, "w": 4, "h": 4},
+      "targets": [{"expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99", "refId": "A"}],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate by Status",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
       "targets": [
-        {
-          "expr": "rate(api_requests_total[1m])",
-          "legendFormat": "Requests/sec",
-          "refId": "A"
-        }
+        {"expr": "sum(rate(http_requests_total{status=~\"2..\"}[5m]))", "legendFormat": "2xx", "refId": "A"},
+        {"expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m]))", "legendFormat": "4xx", "refId": "B"},
+        {"expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))", "legendFormat": "5xx", "refId": "C"}
       ],
-      "fieldConfig": {"defaults": {"unit": "req/s"}, "overrides": []}
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
     },
     {
-      "type": "graph",
-      "title": "Scrape Duration",
-      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "type": "timeseries",
+      "title": "Request Duration Percentiles",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
       "targets": [
-        {
-          "expr": "scrape_duration_seconds{job=\"defifundr-api\"}",
-          "legendFormat": "Scrape Duration",
-          "refId": "A"
-        }
+        {"expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99", "refId": "C"}
       ],
       "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+    },
+    {
+      "type": "timeseries",
+      "title": "Top Endpoints by Request Rate",
+      "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
+      "targets": [
+        {"expr": "topk(10, sum(rate(http_requests_total[5m])) by (method, path))", "legendFormat": "{{method}} {{path}}", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
     }
   ]
 }
